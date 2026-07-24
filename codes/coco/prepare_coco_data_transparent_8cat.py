@@ -2,11 +2,12 @@
 prepare_coco_data_transparent_8cat.py
 =====================================
 
-Prepare segmented COCO object crops for an 8-category IVSN-style experiment,
+Prepare segmented COCO object crops for a 16-category IVSN-style experiment,
 saving them as RGBA PNGs with transparent background.
 
 Categories:
-    sheep, cattle (cow), cats, horses, teddy bears, kites, dogs, elephants
+    sheep, cattle (cow), cats, horses, teddy bears, kites, dogs, elephants,
+    birds, bears, zebras, giraffes, umbrellas, backpacks, frisbees, suitcases
 
 Processing:
     1. Read COCO instance segmentation masks from instances_{train,val}2017.json
@@ -37,7 +38,7 @@ from PIL import Image
 from pycocotools import mask as mask_utils
 
 
-# 8 categories
+# 16 categories
 CATEGORY_MAP: Dict[str, List[str]] = {
     "sheep": ["sheep"],
     "cattle": ["cow"],
@@ -47,6 +48,14 @@ CATEGORY_MAP: Dict[str, List[str]] = {
     "kites": ["kite"],
     "dogs": ["dog"],
     "elephants": ["elephant"],
+    "birds": ["bird"],
+    "bears": ["bear"],
+    "zebras": ["zebra"],
+    "giraffes": ["giraffe"],
+    "umbrellas": ["umbrella"],
+    "backpacks": ["backpack"],
+    "frisbees": ["frisbee"],
+    "suitcases": ["suitcase"],
 }
 
 OBJECT_SIZE = 156
@@ -287,7 +296,7 @@ def prepare(
         raise RuntimeError("No valid COCO splits found.")
 
     print("=" * 60)
-    print("IVSN 8-category transparent segmented object preparation")
+    print("IVSN 16-category transparent segmented object preparation")
     print("=" * 60)
     print(f"COCO dir   : {coco_dir}")
     print(f"Output dir : {output_dir}")
@@ -351,7 +360,7 @@ def prepare(
 
     print()
     print("Done.")
-    print("Next step: update the experiment scripts to 8 categories / 8 positions.")
+    print("Next step: update the experiment scripts to 16 categories / positions.")
     print(f'Example output root:\n  "{output_dir.resolve()}"')
 
 
