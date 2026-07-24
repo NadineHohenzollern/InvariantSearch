@@ -5,6 +5,7 @@ from typing import Dict, List, Tuple, Optional
 from pathlib import Path
 import math
 import numpy as np
+from scipy.ndimage import distance_transform_edt
 from . import runtime
 from .data import load_rgba
 from .domain import TransformSpec
@@ -33,29 +34,23 @@ def affine_from_spec(spec: TransformSpec) -> Tuple[float, float, float, float, f
     return (float(a), float(b), float(c), float(d), float(e), float(f))
 
 
-def make_circular_cosine_taper_mask(size: int, inner_frac: float, outer_frac: float) -> np.ndarray:
-    assert 0.0 <= inner_frac <= outer_frac <= 1.0
-    yy, xx = np.mgrid[0:size, 0:size].astype(np.float32)
-    cx = (size - 1) / 2.0
-    cy = (size - 1) / 2.0
-    rr = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2)
-    patch_radius = (size - 1) / 2.0
-    r1 = inner_frac * patch_radius
-    r2 = outer_frac * patch_radius
-    mask = np.zeros((size, size), dtype=np.float32)
-    inside = rr <= r1
-    taper = (rr > r1) & (rr < r2)
-    mask[inside] = 1.0
-    if r2 > r1:
-        t = (rr[taper] - r1) / (r2 - r1)
-        mask[taper] = 0.5 * (1.0 + np.cos(np.pi * t))
+def make_boundary_cosine_taper_mask(alpha: np.ndarray, width_px: float) -> np.ndarray:
+    silhouette = alpha > 0
+    if width_px <= 0 or not silhouette.any():
+        return silhouette.astype(np.float32)
+    dist = distance_transform_edt(silhouette)
+    mask = np.ones_like(dist, dtype=np.float32)
+    taper = (dist > 0) & (dist < width_px)
+    t = dist[taper] / width_px
+    mask[taper] = 0.5 * (1.0 - np.cos(np.pi * t))
+    mask[~silhouette] = 0.0
     return mask
 
 
-def apply_edge_taper_rgba(img: Image.Image, inner_frac: float, outer_frac: float) -> Image.Image:
+def apply_edge_taper_rgba(img: Image.Image, width_px: float) -> Image.Image:
     arr = np.array(img, dtype=np.uint8)
     alpha = arr[:, :, 3].astype(np.float32) / 255.0
-    taper = make_circular_cosine_taper_mask(img.size[0], inner_frac, outer_frac)
+    taper = make_boundary_cosine_taper_mask(alpha, width_px)
     alpha_new = np.clip(alpha * taper, 0.0, 1.0)
     arr[:, :, 3] = (255.0 * alpha_new).astype(np.uint8)
     return Image.fromarray(arr, mode='RGBA')
@@ -75,7 +70,7 @@ def apply_boundary_mask_rgba(img: Image.Image, args) -> Image.Image:
     if args.smoothing_mode == 'alpha':
         return apply_alpha_boundary_softening_rgba(img, blur_radius=args.alpha_soften_blur_radius)
     if args.smoothing_mode == 'cosine':
-        return apply_edge_taper_rgba(img, inner_frac=args.edge_taper_inner_frac, outer_frac=args.edge_taper_outer_frac)
+        return apply_edge_taper_rgba(img, width_px=args.edge_taper_width_px)
     raise ValueError(f'Unsupported smoothing mode: {args.smoothing_mode}')
 
 

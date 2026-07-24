@@ -36,8 +36,7 @@ def parse_args():
     parser.add_argument('--no-save-base-manifest', action='store_true')
     parser.add_argument('--smoothing-mode', type=str, choices=['none', 'alpha', 'cosine'], default='none')
     parser.add_argument('--alpha-soften-blur-radius', type=float, default=3.0)
-    parser.add_argument('--edge-taper-inner-frac', type=float, default=0.82)
-    parser.add_argument('--edge-taper-outer-frac', type=float, default=1.0)
+    parser.add_argument('--edge-taper-width-px', type=float, default=5.0)
     parser.add_argument('--smooth-target', action='store_true')
     parser.add_argument('--smooth-cue', action='store_true')
     parser.add_argument('--smooth-distractors', action='store_true')
@@ -104,7 +103,7 @@ def main():
         trials = build_trials_from_base(base_trials, condition_name, condition_group, condition_value, sweep_spec, args.transform_cue_too, args.couple_cue_to_target)
         cond_results = [run_trial(model, trial, args) for trial in trials]
         cond_summary = summarize_subset(cond_results)
-        cond_summary.update({'n_unique_trials': n_unique_trials, 'n_identical': args.n_identical, 'n_different': args.n_different, 'n_total_trials': n_total_trials, 'smoothing_mode': args.smoothing_mode, 'smooth_target': args.smooth_target, 'smooth_cue': args.smooth_cue, 'smooth_distractors': args.smooth_distractors, 'alpha_soften_blur_radius': args.alpha_soften_blur_radius, 'edge_taper_inner_frac': args.edge_taper_inner_frac, 'edge_taper_outer_frac': args.edge_taper_outer_frac, 'model_kind': args.model_kind, 'gist_image_size': args.gist_image_size, 'n_objects': n_objects})
+        cond_summary.update({'n_unique_trials': n_unique_trials, 'n_identical': args.n_identical, 'n_different': args.n_different, 'n_total_trials': n_total_trials, 'smoothing_mode': args.smoothing_mode, 'smooth_target': args.smooth_target, 'smooth_cue': args.smooth_cue, 'smooth_distractors': args.smooth_distractors, 'alpha_soften_blur_radius': args.alpha_soften_blur_radius, 'edge_taper_width_px': args.edge_taper_width_px, 'model_kind': args.model_kind, 'gist_image_size': args.gist_image_size, 'n_objects': n_objects})
         with open(cond_dir / 'summary.json', 'w', encoding='utf-8') as f:
             json.dump(cond_summary, f, indent=2)
         with open(cond_dir / 'trial_results.json', 'w', encoding='utf-8') as f:
@@ -114,7 +113,7 @@ def main():
         write_trial_csv(cond_results, cond_dir / 'trial_results.csv')
         save_examples(model, trials, cond_dir, args.save_examples, args)
         all_results.extend(cond_results)
-    overall = {'transform_mode': args.transform_mode, 'model_kind': args.model_kind, 'gist_image_size': args.gist_image_size, 'n_conditions': len(condition_specs), 'n_trials_total': len(all_results), 'n_positions': runtime.N_POSITIONS, 'n_categories': len(runtime.CATEGORIES), 'n_unique_trials_per_condition': n_unique_trials, 'n_identical_per_condition': args.n_identical, 'n_different_per_condition': args.n_different, 'n_total_trials_per_condition': n_total_trials, 'early_success_fixations_threshold': EARLY_SUCCESS_FIXATIONS, 'shared_base_trials_across_values': True, 'grayscale_noise_only': True, 'conditions': [x[0] for x in condition_specs], 'smoothing_mode': args.smoothing_mode, 'smooth_target': args.smooth_target, 'smooth_cue': args.smooth_cue, 'smooth_distractors': args.smooth_distractors, 'alpha_soften_blur_radius': args.alpha_soften_blur_radius, 'edge_taper_inner_frac': args.edge_taper_inner_frac, 'edge_taper_outer_frac': args.edge_taper_outer_frac, 'n_objects': n_objects}
+    overall = {'transform_mode': args.transform_mode, 'model_kind': args.model_kind, 'gist_image_size': args.gist_image_size, 'n_conditions': len(condition_specs), 'n_trials_total': len(all_results), 'n_positions': runtime.N_POSITIONS, 'n_categories': len(runtime.CATEGORIES), 'n_unique_trials_per_condition': n_unique_trials, 'n_identical_per_condition': args.n_identical, 'n_different_per_condition': args.n_different, 'n_total_trials_per_condition': n_total_trials, 'early_success_fixations_threshold': EARLY_SUCCESS_FIXATIONS, 'shared_base_trials_across_values': True, 'grayscale_noise_only': True, 'conditions': [x[0] for x in condition_specs], 'smoothing_mode': args.smoothing_mode, 'smooth_target': args.smooth_target, 'smooth_cue': args.smooth_cue, 'smooth_distractors': args.smooth_distractors, 'alpha_soften_blur_radius': args.alpha_soften_blur_radius, 'edge_taper_width_px': args.edge_taper_width_px, 'n_objects': n_objects}
     with open(out_dir / 'summary.json', 'w', encoding='utf-8') as f:
         json.dump(overall, f, indent=2)
     with open(out_dir / 'trial_results.json', 'w', encoding='utf-8') as f:
