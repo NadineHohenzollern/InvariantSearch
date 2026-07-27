@@ -58,10 +58,18 @@ def apply_edge_taper_rgba(img: Image.Image, width_px: float) -> Image.Image:
 
 def apply_alpha_boundary_softening_rgba(img: Image.Image, blur_radius: float) -> Image.Image:
     arr = np.array(img, dtype=np.uint8)
-    alpha = Image.fromarray(arr[:, :, 3], mode='L')
-    alpha_blur = alpha.filter(ImageFilter.GaussianBlur(radius=float(blur_radius)))
-    arr[:, :, 3] = np.array(alpha_blur, dtype=np.uint8)
-    return Image.fromarray(arr, mode='RGBA')
+    alpha = arr[:, :, 3]
+    valid = alpha > 0
+    rgb = arr[:, :, :3]
+    if valid.any() and not valid.all():
+        _, indices = distance_transform_edt(~valid, return_indices=True)
+        rgb = rgb[indices[0], indices[1]]
+    alpha_img = Image.fromarray(alpha, mode='L')
+    alpha_blur = alpha_img.filter(ImageFilter.GaussianBlur(radius=float(blur_radius)))
+    out = arr.copy()
+    out[:, :, :3] = rgb
+    out[:, :, 3] = np.array(alpha_blur, dtype=np.uint8)
+    return Image.fromarray(out, mode='RGBA')
 
 
 def apply_boundary_mask_rgba(img: Image.Image, args) -> Image.Image:
