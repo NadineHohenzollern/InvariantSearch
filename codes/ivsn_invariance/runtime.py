@@ -16,16 +16,16 @@ ALL_CATEGORIES = ['sheep', 'cattle', 'cats', 'horses', 'teddybears', 'kites', 'd
 IMAGE_SIZE = 720
 
 
-OBJ_SIZE = 156 # default for circle arrangement
+OBJ_SIZE = None 
 
 
-MIN_MARGIN = 10
+PADDING = None 
 
-
-RADIUS_6 = 220
-
-
-RADIUS_8 = 240
+# for circle:   
+#   MARGIN_RATIO = margin / (2 * patch_radius) 
+# for grid:     
+#   MARGIN_RATIO = margin / patch_size
+MARGIN_RATIO = None
 
 
 CATEGORIES = None
@@ -34,19 +34,16 @@ CATEGORIES = None
 N_POSITIONS = None
 
 
-RADIUS = None
-
-
 POSITIONS = None
 
 
 MAX_FIXATIONS = None
 
 
-# MAX_SIZE_CUTOUT = None
+JITTER = None  # percentage of container size -> determines how much center of cutoff can drift from center of container
 
 
-JITTER = 0.1  # percentage of container size -> determines how much center of cutoff can drift from center of container
+EPSILON = None
 
 
 DEFAULT_N_IDENTICAL = 150
@@ -84,58 +81,53 @@ def get_categories(n_objects: int):
     raise ValueError(f'Unsupported n_objects: {n_objects}. Maximal 16 allowed.')
 
 
-def circle_positions(image_size: int, radius: int, n: int):
-    center = image_size // 2
+def circle_positions():
+    # 1. Determine patch size
+    patch_radius = (2 * math.pi * ((IMAGE_SIZE / 2) - PADDING)) / (2 * N_POSITIONS + (N_POSITIONS + 1) * MARGIN_RATIO * 2 - 2 * math.pi)
+
+    # 2. Determine object size 
+    global OBJ_SIZE, EPSILON
+    EPSILON = int(round(JITTER * 2 * patch_radius))
+    OBJ_SIZE = int(round((patch_radius - EPSILON) * 2))
+
+    # 3. Determine center points 
+    center = IMAGE_SIZE // 2
     pts = []
-    start_angle = -math.pi / 2.0
-    for i in range(n):
-        angle = start_angle + 2 * math.pi * i / n
-        x = center + int(round(math.cos(angle) * radius))
-        y = center + int(round(math.sin(angle) * radius))
+    angle_step = 2 * math.pi / N_POSITIONS
+    placement_radius = IMAGE_SIZE / 2 - PADDING - patch_radius
+    for i in range(N_POSITIONS):
+        x = center + int(round(math.cos(i * angle_step) * placement_radius)) 
+        y = center + int(round(math.sin(i * angle_step) * placement_radius)) 
         pts.append((x, y))
     return pts
 
-def _add_jitter(x: int, y: int, container_size: int):
-    epsilon = round(JITTER * container_size)
-    x += random.randint(-epsilon, epsilon)
-    y += random.randint(-epsilon, epsilon)
-    return (int(round(x)), int(round(y)))
-
-def grid_positions(image_size: int, n_matrix: int, container_size: int = None):
+def grid_positions(n_matrix: int):
     """Determines the 2D center coordinates of the object to be pasted on the 
     search image in a nxn grid map arrangement. 
 
     Parameters: 
-        image_size     (int): width and length of the search image 
         n_matrix       (int): dimension of the nxn matrix 
-        container_size (int): width and length of each object container 
 
     Returns: 
         []: list of object cutoff center coordinates in grid map fashion 
     """
 
-    # determine container and margin size 
-    if container_size is None:
-        # pick values such that container_size = 2 * margin 
-        margin = image_size / (3 * n_matrix + 1)
-        container_size = 2 * margin
-    else:
-        margin = (image_size - n_matrix * container_size) / (n_matrix + 1)
-        if margin < MIN_MARGIN:
-            container_size = (image_size - (n_matrix + 1) * MIN_MARGIN) / n_matrix
-            margin = MIN_MARGIN
+    # 1. Determine patch size and margin
+    patch_size = int(round((IMAGE_SIZE - 2 * PADDING) / (n_matrix + (n_matrix - 1) * MARGIN_RATIO)))
+    margin = int(round(patch_size * MARGIN_RATIO))
 
-    # determine max size of object cutout
-    global OBJ_SIZE
-    OBJ_SIZE = int(round(container_size))
+    # 2. Determine object size 
+    global OBJ_SIZE, EPSILON
+    EPSILON = int(round(JITTER * patch_size))
+    OBJ_SIZE = int(round(patch_size - 2 * EPSILON))
 
-    # determine object positions (cutout center) in grip map arrangement
+    # 3. Determine center points 
     pts = []
     for row in range(n_matrix):
-        y = margin + row * (container_size + margin) + container_size / 2
+        y = PADDING + patch_size * (float(row) + 0.5) + row * margin 
         for col in range(n_matrix):
-            x = margin + col * (container_size + margin) + container_size / 2
-            pts.append(_add_jitter(int(round(x)), int(round(y)), container_size))
+            x = PADDING + patch_size * (float(col) + 0.5) + col * margin 
+            pts.append((int(round(x)), int(round(y))))
     return pts
 
 def set_seed(seed: int):
@@ -157,20 +149,22 @@ def load_font(size=18):
         return ImageFont.load_default()
 
 
-def set_runtime_geometry_circle(n_objects: int):
+def set_runtime_geometry_circle(n_objects: int, padding: int, margin_ration: float, jitter: float):
     global POSITIONS
-    _set_runtime_geometry(n_objects)
-    radius = RADIUS_6 if n_objects == 6 else RADIUS_8
-    POSITIONS = circle_positions(IMAGE_SIZE, radius, N_POSITIONS)
+    _set_runtime_geometry(n_objects, padding, margin_ration, jitter)
+    POSITIONS = circle_positions()
 
-def set_runtime_geometry_grid(n_matrix: int, container_size: int):
+def set_runtime_geometry_grid(n_matrix: int, padding: int, margin_ration: float, jitter: float):
     global POSITIONS
-    _set_runtime_geometry(n_matrix**2)
-    POSITIONS = grid_positions(IMAGE_SIZE, n_matrix, container_size)
+    _set_runtime_geometry(n_matrix**2, padding, margin_ration, jitter)
+    POSITIONS = grid_positions(n_matrix)
 
-def _set_runtime_geometry(n_objects: int):
-    global CATEGORIES, N_POSITIONS, POSITIONS, MAX_FIXATIONS
+def _set_runtime_geometry(n_objects: int, padding: int, margin_ration: float, jitter: float):
+    global CATEGORIES, N_POSITIONS, MAX_FIXATIONS, PADDING, MARGIN_RATIO, JITTER
     CATEGORIES = get_categories(n_objects)
     N_POSITIONS = n_objects
     MAX_FIXATIONS = n_objects
+    PADDING = padding 
+    MARGIN_RATIO = margin_ration
+    JITTER = jitter
 
