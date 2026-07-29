@@ -10,6 +10,7 @@ from . import runtime
 from .data import load_rgba
 from .domain import TransformSpec
 from .runtime import IMAGE_SIZE
+import random
 
 
 def affine_from_spec(spec: TransformSpec) -> Tuple[float, float, float, float, float, float]:
@@ -116,25 +117,85 @@ def alpha_paste_rgb(canvas_rgb: Image.Image, obj_rgba: Image.Image, center_xy: T
     canvas_rgba.alpha_composite(obj_rgba, (x, y))
     return canvas_rgba.convert('RGB')
 
+def shift_cutout_to_center(obj_rgba: Image.Image):
+    # crop non-transparent cutout 
+    alpha = obj_rgba.split()[3]
+    bbox = alpha.getbbox() 
+    cropped = obj_rgba.crop(bbox)
+    cw, ch = cropped.size
+
+    # make new image
+    W, H = obj_rgba.size
+    result = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+
+    # paste cropped cutout in the center of new image
+    x = (W - cw) // 2
+    y = (H - ch) // 2
+    result.paste(cropped, (x, y), cropped)  
+    return result
+
+def rescale_image(obj_rgba: Image.Image) -> Image.Image:
+    # get bounding box of visible content 
+    alpha = obj_rgba.split()[3]
+    bbox = alpha.getbbox()
+    left, upper, right, lower = bbox
+    w, h = right - left, lower - upper
+
+    # max distance to center = 1/2 * diagonale 
+    max_dist = math.hypot(w / 2, h / 2)
+
+    # rescale cutout so it fits within a circle of diameter OBJ_SIZE
+    circle_radius = runtime.OBJ_SIZE / 2
+    scale = circle_radius / max_dist
+    new_size = (max(1, int(round(obj_rgba.width * scale))),
+                max(1, int(round(obj_rgba.height * scale))))
+
+    resized = obj_rgba.resize(new_size, Image.LANCZOS)
+
+    # crop centered to OBJ_SIZE x OBJ_SIZE
+    rw, rh = resized.size
+    cx, cy = rw / 2, rh / 2
+    half = runtime.OBJ_SIZE / 2
+    crop_box = (
+        int(round(cx - half)),
+        int(round(cy - half)),
+        int(round(cx + half)),
+        int(round(cy + half)),
+    )
+    return resized.crop(crop_box)
+
 
 def render_cue(cue_path: Path, args, transform_spec: Optional[TransformSpec]=None) -> Tuple[Image.Image, Image.Image]:
-    cue_rgba_orig = load_rgba(cue_path).resize((runtime.OBJ_SIZE, runtime.OBJ_SIZE), Image.BICUBIC)
+    # render original target cue 
+    cue_rgba = rescale_image(shift_cutout_to_center(load_rgba(cue_path)))
+    cue_orig = Image.new('RGB', (runtime.OBJ_SIZE, runtime.OBJ_SIZE), (128, 128, 128))
+    cue_orig = alpha_paste_rgb(cue_orig, cue_rgba, (runtime.OBJ_SIZE // 2, runtime.OBJ_SIZE // 2))
+
+    # render transformed target cue
     if transform_spec is None:
         transform_spec = TransformSpec()
-    cue_rgba_t = apply_transform_rgba(cue_rgba_orig, transform_spec, args, apply_smoothing=args.smooth_cue)
-    cue_orig = Image.new('RGB', (runtime.OBJ_SIZE, runtime.OBJ_SIZE), (128, 128, 128))
-    cue_orig = alpha_paste_rgb(cue_orig, cue_rgba_orig, (runtime.OBJ_SIZE // 2, runtime.OBJ_SIZE // 2))
+    cue_rgba_t = apply_transform_rgba(cue_rgba, transform_spec, args, apply_smoothing=args.smooth_cue)
     cue_t = Image.new('RGB', (runtime.OBJ_SIZE, runtime.OBJ_SIZE), (128, 128, 128))
     cue_t = alpha_paste_rgb(cue_t, cue_rgba_t, (runtime.OBJ_SIZE // 2, runtime.OBJ_SIZE // 2))
     return (cue_orig, cue_t)
 
+def add_jitter_to_position(position: tuple):
+    x, y = position
+    x += random.uniform(-runtime.EPSILON, runtime.EPSILON)
+    y += random.uniform(-runtime.EPSILON, runtime.EPSILON)
+    return (x, y)
 
 def render_search_display(target_path: Path, distractor_paths: List[Path], target_position: int, target_transform: TransformSpec, distractor_transforms: List[TransformSpec], args) -> Image.Image:
+    # render target image
     canvas = Image.new('RGB', (IMAGE_SIZE, IMAGE_SIZE), (128, 128, 128))
-    target_rgba = apply_transform_rgba(load_rgba(target_path).resize((runtime.OBJ_SIZE, runtime.OBJ_SIZE), Image.BICUBIC), target_transform, args, apply_smoothing=args.smooth_target)
-    canvas = alpha_paste_rgb(canvas, target_rgba, runtime.POSITIONS[target_position])
+    target_rgba = rescale_image(shift_cutout_to_center(load_rgba(target_path)))
+    target_transormed = apply_transform_rgba(target_rgba, target_transform, args, apply_smoothing=args.smooth_target)
+    canvas = alpha_paste_rgb(canvas, target_transormed, add_jitter_to_position(runtime.POSITIONS[target_position]))
+    
+    # render distractor images
     remaining_positions = [i for i in range(runtime.N_POSITIONS) if i != target_position]
     for dpath, pidx, dspec in zip(distractor_paths, remaining_positions, distractor_transforms):
-        dist_rgba = apply_transform_rgba(load_rgba(dpath).resize((runtime.OBJ_SIZE, runtime.OBJ_SIZE), Image.BICUBIC), dspec, args, apply_smoothing=args.smooth_distractors)
-        canvas = alpha_paste_rgb(canvas, dist_rgba, runtime.POSITIONS[pidx])
+        distractor_rgba = rescale_image(shift_cutout_to_center(load_rgba(dpath)))
+        dist_rgba = apply_transform_rgba(distractor_rgba, dspec, args, apply_smoothing=args.smooth_distractors)
+        canvas = alpha_paste_rgb(canvas, dist_rgba, add_jitter_to_position(runtime.POSITIONS[pidx]))
     return canvas
