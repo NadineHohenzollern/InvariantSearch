@@ -117,7 +117,7 @@ def smoothing_suffix(args) -> str:
     if args.smoothing_mode == 'alpha':
         return f'smoothed_alpha_{role_tag}_b{args.alpha_soften_blur_radius:g}'
     if args.smoothing_mode == 'cosine':
-        return f'smoothed_cosine_{role_tag}_i{args.edge_taper_inner_frac:g}_o{args.edge_taper_outer_frac:g}'
+        return f'smoothed_cosine_{role_tag}_w{args.edge_taper_width_px:g}'
     raise ValueError(f'Unsupported smoothing mode: {args.smoothing_mode}')
 
 
