@@ -1,13 +1,14 @@
 """Models for IVSN invariance experiments."""
 
 import torch.nn.functional as F
+import torchvision.transforms.v2 as transforms
 from gist import Gist
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from typing import Dict, List, Tuple, Optional
 from collections import OrderedDict
 from pathlib import Path
 from copy import deepcopy
-from torchvision import models, transforms
+from torchvision import models
 import torch.nn as nn
 import numpy as np
 import torch
@@ -136,30 +137,57 @@ class BaseAttentionModel:
 
 class VGGAttentionModel(BaseAttentionModel):
 
-    def __init__(self, device: str='cpu'):
+    def __init__(self, device: str='cpu', attention_padding: int=0):
         self.device = torch.device(device)
         weights = models.VGG16_Weights.IMAGENET1K_V1
         vgg = models.vgg16(weights=weights).features.eval().to(self.device)
         self.backbone = vgg[:30].eval().to(self.device)
+        self.maxpool = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
         for p in self.backbone.parameters():
             p.requires_grad = False
         t = weights.transforms()
-        self.transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor(), transforms.Normalize(mean=t.mean, std=t.std)])
+        self.search_transform = transforms.Compose([
+            transforms.ToImage(),
+            transforms.Resize((224, 224)),
+            transforms.Normalize(mean=t.mean, std=t.std)
+        ])
+        self.cue_transform = transforms.Compose([
+            transforms.ToImage(),
+            transforms.Resize((32, 32)),
+            transforms.Normalize(mean=t.mean, std=t.std)
+        ])
+        self.attention_padding = attention_padding
 
-    def preprocess(self, img: Image.Image) -> torch.Tensor:
-        return self.transform(img).unsqueeze(0).to(self.device)
+    def preprocess(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
+        if cue:
+            img = self.cue_transform(img)
+        else:
+            img = self.search_transform(img)
+
+        return img.unsqueeze(0).to(self.device)
 
     @torch.no_grad()
-    def feature_map(self, img: Image.Image) -> torch.Tensor:
-        return self.backbone(self.preprocess(img))
+    def feature_map(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
+        x = self.preprocess(img, cue=cue)
+        x = self.backbone(x)
+        if cue:
+            x = self.maxpool(x)
+        return x
 
     @torch.no_grad()
     def position_scores(self, cue_img: Image.Image, search_img: Image.Image, positions: List[Tuple[int, int]]):
-        cue_feat = self.feature_map(cue_img)
+        cue_feat = self.feature_map(cue_img, cue=True)
         search_feat = self.feature_map(search_img)
-        cue_vec = cue_feat.mean(dim=(2, 3), keepdim=True)
-        attn = (search_feat * cue_vec).sum(dim=1, keepdim=True)
+        attn = (search_feat * cue_feat).sum(dim=1, keepdim=True)
         attn = F.relu(attn)
+        if self.attention_padding > 0:
+            attn = F.pad(
+                attn,
+                (self.attention_padding, self.attention_padding, self.attention_padding, self.attention_padding),
+                mode='constant',
+                value=0
+                )
+        attn = attn / (attn.max() + 1e-8)
         attn_up = F.interpolate(attn, size=(IMAGE_SIZE, IMAGE_SIZE), mode='bilinear', align_corners=False)
         attn_np = attn_up.squeeze().detach().cpu().numpy()
         scores = []
