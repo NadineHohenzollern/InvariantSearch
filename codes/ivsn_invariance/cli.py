@@ -19,8 +19,10 @@ def parse_args():
     parser.add_argument('--n-different', type=int, default=DEFAULT_N_DIFFERENT)
     parser.add_argument('--arrangement', type=str, choices=['grid', 'circle'], default='circle')
     parser.add_argument('--n-objects', choices=[6, 8], type=int, default=8)
-    parser.add_argument('--n-matrix', choices=[2, 3, 4], type=int, default=3)
-    parser.add_argument('--container_size', type=int)
+    parser.add_argument('--n-matrix', choices=[2, 3, 4], type=int, default=3) 
+    parser.add_argument('--padding', type=int, default=30)                      ####
+    parser.add_argument('--margin-ratio', type=int, default=1)                  ####
+    parser.add_argument('--jitter', type=float, default=0)                      ####
     parser.add_argument('--transform-mode', type=str, choices=['rotation', 'scale', 'shift_x', 'shift_y', 'skew_x', 'skew_y', 'noise', 'blur', 'mixed'], required=True)
     parser.add_argument('--rotation-values', type=float, nargs='*', default=[0, 30, 60, 90, 120, 150, 180])
     parser.add_argument('--scale-values', type=float, nargs='*', default=[0.5, 1.5])
@@ -34,7 +36,7 @@ def parse_args():
     parser.set_defaults(couple_cue_to_target=True)
     parser.add_argument('--load-base-manifest', type=str, default=None)
     parser.add_argument('--no-save-base-manifest', action='store_true')
-    parser.add_argument('--smoothing-mode', type=str, choices=['none', 'alpha', 'cosine'], default='none')
+    parser.add_argument('--smoothing-mode', type=str, choices=['none', 'alpha', 'cosine'], default='cosine')
     parser.add_argument('--alpha-soften-blur-radius', type=float, default=3.0)
     parser.add_argument('--edge-taper-width-px', type=float, default=5.0)
     parser.add_argument('--smooth-target', action='store_true')
@@ -71,10 +73,10 @@ def main():
     set_seed(args.seed)
     n_objects = None
     if args.arrangement == 'circle':
-        set_runtime_geometry_circle(args.n_objects)
+        set_runtime_geometry_circle(args.n_objects, args.padding, args.margin_ratio, args.jitter)
         n_objects = args.n_objects
     elif args.arrangement == 'grid':
-        set_runtime_geometry_grid(args.n_matrix, args.container_size)
+        set_runtime_geometry_grid(args.n_matrix, args.padding, args.margin_ratio, args.jitter)
         n_objects = args.n_matrix * args.n_matrix 
     data_root = Path(args.data_root)
     out_dir = build_dynamic_out_dir(Path(args.out_dir), args)
