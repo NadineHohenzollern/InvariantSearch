@@ -149,11 +149,13 @@ class VGGAttentionModel(BaseAttentionModel):
         self.search_transform = transforms.Compose([
             transforms.ToImage(),
             transforms.Resize((224, 224)),
+            transforms.ToDtype(torch.float32, scale=True),
             transforms.Normalize(mean=t.mean, std=t.std)
         ])
         self.cue_transform = transforms.Compose([
             transforms.ToImage(),
             transforms.Resize((32, 32)),
+            transforms.ToDtype(torch.float32, scale=True),
             transforms.Normalize(mean=t.mean, std=t.std)
         ])
         self.attention_padding = attention_padding
