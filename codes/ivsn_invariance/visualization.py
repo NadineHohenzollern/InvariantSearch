@@ -10,6 +10,8 @@ from .domain import Trial
 from .models import BaseAttentionModel
 from .runtime import ensure_dir, load_font
 from .search import ivsn_fixation_search, render_trial_from_struct
+from .imaging import render_target
+from .domain import TransformSpec
 
 
 def normalize_map(arr: np.ndarray) -> np.ndarray:
@@ -71,10 +73,10 @@ def save_cue_compare(cue_orig: Image.Image, cue_t: Image.Image, out_path: Path, 
     ax1 = fig.add_subplot(1, 2, 1)
     ax2 = fig.add_subplot(1, 2, 2)
     ax1.imshow(np.array(cue_orig))
-    ax1.set_title('Cue original')
+    ax1.set_title('Cue')
     ax1.axis('off')
     ax2.imshow(np.array(cue_t))
-    ax2.set_title('Cue transformed')
+    ax2.set_title('Target')
     ax2.axis('off')
     fig.tight_layout()
     fig.savefig(out_path, dpi=150, bbox_inches='tight')
@@ -82,18 +84,27 @@ def save_cue_compare(cue_orig: Image.Image, cue_t: Image.Image, out_path: Path, 
 
 
 def save_examples(model: BaseAttentionModel, trials: List[Trial], out_dir: Path, save_examples: int, args):
+
     ex_root = out_dir / 'examples'
     ensure_dir(ex_root / 'combined')
     ensure_dir(ex_root / 'cue_compare')
     n = min(save_examples, len(trials))
+
     for idx in range(n):
         trial = trials[idx]
+
         cue_orig, cue_t, search_img = render_trial_from_struct(trial, args)
+        target_orig, target_t = render_target(Path(trial.target_path), args, TransformSpec(**trial.target_transform))
+
         attn_np, scores = model.position_scores(cue_t, search_img, runtime.POSITIONS)
+
         _, fix_centers, found, _ = ivsn_fixation_search(scores, trial.target_position, runtime.MAX_FIXATIONS)
+
         overlay = make_attention_overlay(search_img, attn_np, alpha=0.45)
         fix_img = draw_fixation_path(search_img, fix_centers, trial.target_position)
+
         stem = f'trial_{idx:03d}'
         title = f'{stem} | model={args.model_kind} | gist_size={args.gist_image_size} | type={trial.trial_type} | cat={trial.target_category} | target=P{trial.target_position}'
+
         save_combined_figure(cue_t, search_img, overlay, fix_img, ex_root / 'combined' / f'{stem}_combined.png', title)
-        save_cue_compare(cue_orig, cue_t, ex_root / 'cue_compare' / f'{stem}_cue_compare.png', title)
+        save_cue_compare(cue_t, target_t, ex_root / 'cue_compare' / f'{stem}_cue_compare.png', title)
