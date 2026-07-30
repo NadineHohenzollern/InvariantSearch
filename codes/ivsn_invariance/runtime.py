@@ -77,7 +77,7 @@ DEFAULT_GIST_CHECKPOINTS = {
 
 def get_categories(n_objects: int):
     if n_objects <= 16:
-        return random.sample(ALL_CATEGORIES, n_objects)
+        return ALL_CATEGORIES[:n_objects]
     raise ValueError(f'Unsupported n_objects: {n_objects}. Maximal 16 allowed.')
 
 
