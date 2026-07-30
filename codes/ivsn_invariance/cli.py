@@ -33,7 +33,6 @@ def parse_args():
     parser.add_argument('--transform-cue-too', action='store_true')
     parser.add_argument('--couple-cue-to-target', action='store_true', dest='couple_cue_to_target')
     parser.add_argument('--no-couple-cue-to-target', action='store_false', dest='couple_cue_to_target')
-    parser.set_defaults(couple_cue_to_target=True)
     parser.add_argument('--load-base-manifest', type=str, default=None)
     parser.add_argument('--no-save-base-manifest', action='store_true')
     parser.add_argument('--smoothing-mode', type=str, choices=['none', 'alpha', 'cosine'], default='cosine')
@@ -49,6 +48,7 @@ def parse_args():
     parser.add_argument('--conv-gist-checkpoint', type=str, default=None)
     parser.add_argument('--conv-gist-mlp-checkpoint', type=str, default=None)
     parser.add_argument('--vgg-gist-imagenet64-checkpoint', type=str, default=None)
+    parser.add_argument('--attention-padding', type=int, default=0)
     args = parser.parse_args()
     return args
 
