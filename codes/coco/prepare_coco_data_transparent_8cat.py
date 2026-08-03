@@ -18,15 +18,17 @@ Processing:
     6. Convert object to grayscale
     7. Histogram-equalize the object luminance only
     8. Save as RGBA PNG with transparent background
+    9. Save mask-to-source-image area ratios as CSV and histogram plots
 
 Usage:
     python prepare_coco_data_transparent_8cat.py --coco_dir C:/path/to/coco
 
 Requires:
-    pip install pycocotools pillow numpy
+    pip install pycocotools pillow numpy matplotlib
 """
 
 import argparse
+import csv
 import json
 import math
 import os
@@ -34,6 +36,7 @@ import random
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 from pycocotools import mask as mask_utils
@@ -191,6 +194,83 @@ def remove_surplus_crops(category_dir: Path, expected_count: int) -> int:
     return len(surplus_paths)
 
 
+def save_segmentation_area_statistics(
+    records_by_category: Dict[str, List[dict]],
+    output_dir: Path,
+    bins: int = 20,
+) -> None:
+    """Save per-crop area ratios and fixed-range histogram plots."""
+    records = [
+        record
+        for category_records in records_by_category.values()
+        for record in category_records
+    ]
+    if not records:
+        return
+
+    csv_path = output_dir / "segmentation_area_ratios.csv"
+    with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=list(records[0].keys()))
+        writer.writeheader()
+        writer.writerows(records)
+
+    bin_edges = np.linspace(0.0, 1.0, bins + 1)
+    all_ratios = [record["segmentation_area_ratio"] for record in records]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    ax.hist(all_ratios, bins=bin_edges, edgecolor="black", linewidth=0.5)
+    ax.set_xlim(0.0, 1.0)
+    ax.set_xlabel("Segmentation area / source image area")
+    ax.set_ylabel("Image count")
+    ax.set_title(f"Segmentation area ratios (all categories, n={len(records)})")
+    ax.grid(True, axis="y", alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(output_dir / "segmentation_area_histogram_all.png", dpi=150)
+    plt.close(fig)
+
+    columns = 4
+    rows = math.ceil(len(records_by_category) / columns)
+    fig, axes = plt.subplots(
+        rows,
+        columns,
+        figsize=(columns * 4, rows * 3),
+        sharex=True,
+        sharey=True,
+        squeeze=False,
+    )
+    for ax, (category, category_records) in zip(
+        axes.flat, records_by_category.items()
+    ):
+        ratios = [
+            record["segmentation_area_ratio"] for record in category_records
+        ]
+        ax.hist(ratios, bins=bin_edges, edgecolor="black", linewidth=0.4)
+        ax.set_xlim(0.0, 1.0)
+        mean_ratio = float(np.mean(ratios)) if ratios else float("nan")
+        ax.set_title(f"{category} (n={len(ratios)}, mean={mean_ratio:.3f})")
+        ax.grid(True, axis="y", alpha=0.3)
+
+    for ax in list(axes.flat)[len(records_by_category):]:
+        ax.set_visible(False)
+
+    fig.supxlabel("Segmentation area / source image area")
+    fig.supylabel("Image count")
+    fig.suptitle("Segmentation area ratios by category")
+    fig.tight_layout()
+    fig.savefig(
+        output_dir / "segmentation_area_histograms_by_category.png",
+        dpi=150,
+    )
+    plt.close(fig)
+
+    print(f"Area ratios : {csv_path}")
+    print(f"Histogram   : {output_dir / 'segmentation_area_histogram_all.png'}")
+    print(
+        "By category: "
+        f"{output_dir / 'segmentation_area_histograms_by_category.png'}"
+    )
+
+
 def load_coco_annotations(ann_file: str) -> Tuple[dict, dict, dict]:
     print(f"Loading {os.path.basename(ann_file)} ...", flush=True)
     with open(ann_file, "r", encoding="utf-8") as f:
@@ -219,16 +299,17 @@ def crop_category(
     out_dir: Path,
     max_per_cat: int,
     min_area: int,
+    split_name: str,
     existing_count: int = 0,
     seed: int = 0,
-) -> int:
+) -> Tuple[int, List[dict]]:
     matching_cat_ids = [
         cid for cid, name in cat_id_to_name.items()
         if name.lower() in [cn.lower() for cn in coco_names]
     ]
     if not matching_cat_ids:
         print(f"  No COCO match for {exp_cat_name} ({coco_names})")
-        return 0
+        return 0, []
 
     anns = []
     for cid in matching_cat_ids:
@@ -240,17 +321,18 @@ def crop_category(
     ]
     if not anns:
         print(f"  No valid annotations for {exp_cat_name}")
-        return 0
+        return 0, []
 
     rng = random.Random(seed)
     rng.shuffle(anns)
 
     needed = max_per_cat - existing_count
     if needed <= 0:
-        return 0
+        return 0, []
 
     saved = 0
     idx = existing_count
+    area_records: List[dict] = []
 
     for ann in anns:
         if saved >= needed:
@@ -284,6 +366,18 @@ def crop_category(
             processed = preprocess_segmented_object(crop_rgb, crop_mask)
             out_path = out_dir / f"img_{idx:05d}.png"
             processed.save(out_path)
+            source_image_area = img_info["height"] * img_info["width"]
+            area_records.append({
+                "category": exp_cat_name,
+                "crop_file": str(out_path.relative_to(out_dir.parent)),
+                "source_split": split_name,
+                "source_image_file": img_info["file_name"],
+                "image_id": ann["image_id"],
+                "annotation_id": ann.get("id"),
+                "segmentation_pixels": mask_area,
+                "source_image_pixels": source_image_area,
+                "segmentation_area_ratio": mask_area / source_image_area,
+            })
             saved += 1
             idx += 1
 
@@ -291,7 +385,7 @@ def crop_category(
             print(f"  Warning on annotation {ann.get('id')}: {exc}")
             continue
 
-    return saved
+    return saved, area_records
 
 
 def prepare(
@@ -339,6 +433,9 @@ def prepare(
         (output_dir / exp_cat).mkdir(parents=True, exist_ok=True)
 
     counts = {cat: 0 for cat in CATEGORY_MAP}
+    area_records_by_category: Dict[str, List[dict]] = {
+        cat: [] for cat in CATEGORY_MAP
+    }
 
     for split_name, ann_file, img_dir in splits_to_use:
         print(f"--- Split: {split_name}")
@@ -349,7 +446,7 @@ def prepare(
                 print(f"{exp_cat:12s}: already full")
                 continue
 
-            n_saved = crop_category(
+            n_saved, area_records = crop_category(
                 exp_cat_name=exp_cat,
                 coco_names=coco_names,
                 cat_id_to_name=cat_id_to_name,
@@ -359,10 +456,12 @@ def prepare(
                 out_dir=output_dir / exp_cat,
                 max_per_cat=max_per_cat,
                 min_area=min_area,
+                split_name=split_name,
                 existing_count=counts[exp_cat],
                 seed=seed + hash(split_name + exp_cat) % 10000,
             )
             counts[exp_cat] += n_saved
+            area_records_by_category[exp_cat].extend(area_records)
             print(f"{exp_cat:12s}: +{n_saved:3d} -> total {counts[exp_cat]:3d}")
         print()
 
@@ -391,6 +490,9 @@ def prepare(
         removed = remove_surplus_crops(output_dir / cat, max_per_cat)
         if removed:
             print(f"{cat:12s}: removed {removed} surplus crop(s)")
+
+    print("Saving segmentation-area statistics...")
+    save_segmentation_area_statistics(area_records_by_category, output_dir)
 
     if vis_samples > 0:
         print("Saving montage previews...")
