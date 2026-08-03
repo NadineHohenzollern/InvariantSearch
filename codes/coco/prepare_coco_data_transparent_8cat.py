@@ -11,12 +11,13 @@ Categories:
 
 Processing:
     1. Read COCO instance segmentation masks from instances_{train,val}2017.json
-    2. Extract only the segmented object pixels
-    3. Crop to the tight mask bounding box
-    4. Resize so the object fits within 156x156 while preserving aspect ratio
-    5. Convert object to grayscale
-    6. Histogram-equalize the object luminance only
-    7. Save as RGBA PNG with transparent background
+    2. Reject annotations whose object mask is split across multiple polygons
+    3. Extract only the segmented object pixels
+    4. Crop to the tight mask bounding box
+    5. Resize so the object fits within 156x156 while preserving aspect ratio
+    6. Convert object to grayscale
+    7. Histogram-equalize the object luminance only
+    8. Save as RGBA PNG with transparent background
 
 Usage:
     python prepare_coco_data_transparent_8cat.py --coco_dir C:/path/to/coco
@@ -59,6 +60,7 @@ CATEGORY_MAP: Dict[str, List[str]] = {
 }
 
 OBJECT_SIZE = 156
+IMAGES_PER_CATEGORY = 300
 
 
 def histogram_equalize_gray_array(arr: np.ndarray, valid_mask: np.ndarray) -> np.ndarray:
@@ -103,6 +105,19 @@ def coco_segmentation_to_mask(annotation: dict, height: int, width: int) -> np.n
     if mask.ndim == 3:
         mask = np.any(mask, axis=2)
     return mask.astype(bool)
+
+
+def has_single_segmentation(annotation: dict) -> bool:
+    """Return whether a COCO annotation describes one contiguous polygon.
+
+    COCO stores polygon segmentations as a list with one entry per disconnected
+    object part. Keeping only one-entry lists prevents crops that contain several
+    separated fragments. RLE segmentations are retained because they do not
+    expose separate polygon parts (and crowd RLEs are already excluded while
+    loading annotations).
+    """
+    segmentation = annotation.get("segmentation")
+    return not isinstance(segmentation, list) or len(segmentation) == 1
 
 
 def tight_crop_from_mask(rgb: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -164,6 +179,18 @@ def make_montage_rgba(images: List[Image.Image], cols: int = 10, cell: int = OBJ
     return montage
 
 
+def remove_surplus_crops(category_dir: Path, expected_count: int) -> int:
+    """Remove stale generated crops outside the current output index range."""
+    expected_names = {f"img_{index:05d}.png" for index in range(expected_count)}
+    surplus_paths = [
+        path for path in category_dir.glob("img_*.png")
+        if path.name not in expected_names
+    ]
+    for path in surplus_paths:
+        path.unlink()
+    return len(surplus_paths)
+
+
 def load_coco_annotations(ann_file: str) -> Tuple[dict, dict, dict]:
     print(f"Loading {os.path.basename(ann_file)} ...", flush=True)
     with open(ann_file, "r", encoding="utf-8") as f:
@@ -207,7 +234,10 @@ def crop_category(
     for cid in matching_cat_ids:
         anns.extend(ann_by_cat.get(cid, []))
 
-    anns = [a for a in anns if a.get("area", 0) >= min_area]
+    anns = [
+        a for a in anns
+        if a.get("area", 0) >= min_area and has_single_segmentation(a)
+    ]
     if not anns:
         print(f"  No valid annotations for {exp_cat_name}")
         return 0
@@ -268,7 +298,7 @@ def prepare(
     coco_dir: str,
     output_dir: str = "coco_crops_transparent_8cat",
     split: str = "both",
-    max_per_cat: int = 334,
+    max_per_cat: int = IMAGES_PER_CATEGORY,
     min_area: int = 2000,
     vis_samples: int = 1,
     seed: int = 42,
@@ -346,6 +376,22 @@ def prepare(
     print(f"{'TOTAL':12s}: {total:4d}")
     print()
 
+    incomplete_categories = {
+        cat: count for cat, count in counts.items() if count < max_per_cat
+    }
+    if incomplete_categories:
+        details = ", ".join(
+            f"{cat}={count}" for cat, count in incomplete_categories.items()
+        )
+        raise RuntimeError(
+            f"Could not create {max_per_cat} valid images for every category: {details}"
+        )
+
+    for cat in CATEGORY_MAP:
+        removed = remove_surplus_crops(output_dir / cat, max_per_cat)
+        if removed:
+            print(f"{cat:12s}: removed {removed} surplus crop(s)")
+
     if vis_samples > 0:
         print("Saving montage previews...")
         for cat in CATEGORY_MAP:
@@ -366,13 +412,13 @@ def prepare(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Prepare transparent segmented COCO crops for an 8-category IVSN experiment",
+        description="Prepare transparent segmented COCO crops for a 16-category IVSN experiment",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--coco_dir", type=str, required=True, help="Root COCO directory")
     parser.add_argument("--output_dir", type=str, default="coco_crops_transparent_8cat")
     parser.add_argument("--split", type=str, choices=["train2017", "val2017", "both"], default="both")
-    parser.add_argument("--max_per_cat", type=int, default=334)
+    parser.add_argument("--max_per_cat", type=int, default=IMAGES_PER_CATEGORY)
     parser.add_argument("--min_area", type=int, default=2000)
     parser.add_argument("--vis_samples", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)
