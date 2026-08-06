@@ -10,7 +10,7 @@ import random
 ALT_CATEGORY_NAMES = {'teddybears': ['teddybears', 'teddy_bears']}
 
 
-ALL_CATEGORIES = ['sheep', 'cattle', 'cats', 'horses', 'teddybears', 'kites', 'dogs', 'elephants', 'birds', 'bears', 'zebras', 'giraffes', 'umbrellas', 'backpacks', 'frisbees', 'suitcases']
+ALL_CATEGORIES = ['sheep', 'cattle', 'cats', 'horses', 'teddybears', 'kites', 'birds', 'dogs', 'umbrellas', 'elephants', 'bears', 'zebras', 'giraffes', 'backpacks', 'frisbees', 'suitcases']
 
 
 IMAGE_SIZE = 720
