@@ -46,10 +46,10 @@ JITTER = None  # percentage of container size -> determines how much center of c
 EPSILON = None
 
 
-DEFAULT_N_IDENTICAL = 150
+DEFAULT_N_IDENTICAL = 120
 
 
-DEFAULT_N_DIFFERENT = 100
+DEFAULT_N_DIFFERENT = 180
 
 
 EARLY_SUCCESS_FIXATIONS = 3
