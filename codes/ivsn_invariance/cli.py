@@ -23,8 +23,8 @@ def parse_args():
     parser.add_argument('--padding', type=int, default=30)                      ####
     parser.add_argument('--margin-ratio', type=int, default=1)                  ####
     parser.add_argument('--jitter', type=float, default=0)                      ####
-    parser.add_argument('--transform-mode', type=str, choices=['rotation', 'scale', 'shift_x', 'shift_y', 'skew_x', 'skew_y', 'noise', 'blur', 'mixed'], required=True)
-    parser.add_argument('--rotation-values', type=float, nargs='*', default=[0, 30, 60, 90, 120, 150, 180])
+    parser.add_argument('--transform-mode', type=str, choices=['original', 'rotation', 'scale', 'shift_x', 'shift_y', 'skew_x', 'skew_y', 'noise', 'blur', 'mixed'], required=True)
+    parser.add_argument('--rotation-values', type=float, nargs='*', default=[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330])
     parser.add_argument('--scale-values', type=float, nargs='*', default=[0.5, 1.5])
     parser.add_argument('--shift-values', type=float, nargs='*', default=[-30, -15, 0, 15, 30])
     parser.add_argument('--skew-values', type=float, nargs='*', default=[-20, -10, 0, 10, 20])
@@ -102,7 +102,7 @@ def main():
     print(f'Output directory: {out_dir}')
 
     n_unique_trials = args.n_identical + args.n_different
-    n_total_trials = 2 * n_unique_trials
+    n_total_trials = n_unique_trials
 
     print('Loading dataset...')
     dataset = load_dataset(data_root)
