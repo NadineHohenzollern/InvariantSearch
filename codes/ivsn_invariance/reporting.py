@@ -423,7 +423,8 @@ def save_grouped_plots(grouped: List[dict], out_dir: Path, transform_mode: str):
     save_grouped_cumulative_plot(
         df,
         max_fixations = df['n_objects'].iloc[0],
-        labels = df["condition_group"].tolist(),
+        labels = [f"{group} {value}" for group, value in zip(
+            df["condition_group"].tolist(), df["condition_value"].tolist())],
         title = f'{transform_mode}: Cumulative fixations',
         x_label='Fixation number',
         y_label='Cumulative performance',
