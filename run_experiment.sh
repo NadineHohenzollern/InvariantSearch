@@ -1,0 +1,9 @@
+python codes/ivsn_invariant_search.py \
+  --data-root /path/to/data \
+  --out-dir codes/outputs/result1 \
+  --arrangement circle \
+  --n-objects 6 \
+  --transform-mode rotation \
+  --model-kind vgg \
+  --device cuda \
+  --attention-padding 0 \
