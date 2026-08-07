@@ -92,7 +92,7 @@ def main():
         n_objects = args.n_objects
 
     elif args.arrangement == 'grid':
-        set_runtime_geometry_grid(args.n_matrix, args.padding, args.margin_ratio, args.jitter)
+        set_runtime_geometry_grid(args.n_matrix, args.padding, args.jitter)
         n_objects = args.n_matrix * args.n_matrix 
 
     data_root = Path(args.data_root)

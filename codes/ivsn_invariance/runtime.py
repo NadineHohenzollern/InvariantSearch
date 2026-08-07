@@ -40,7 +40,10 @@ JITTER = None  # percentage of container size -> determines how much center of c
 EPSILON = None
 
 
-MAX_EPSILON = int(round(0.2 * OBJ_SIZE))
+MAX_EPSILON = int(round(0.15 * OBJ_SIZE))
+
+
+CONTAINER_SIZE = OBJ_SIZE + 2 * MAX_EPSILON
 
 
 DEFAULT_N_IDENTICAL = 120
@@ -110,22 +113,24 @@ def grid_positions(n_matrix: int):
     Returns: 
         []: list of object cutoff center coordinates in grid map fashion 
     """
+    # 1. Constrain padding  
+    global PADDING
+    max_padding = (IMAGE_SIZE - n_matrix * CONTAINER_SIZE) // 2 
+    PADDING = min(PADDING, max_padding)
 
-    # 1. Determine patch size and margin
-    patch_size = int(round((IMAGE_SIZE - 2 * PADDING) / (n_matrix + (n_matrix - 1) * MARGIN_RATIO)))
-    margin = int(round(patch_size * MARGIN_RATIO))
+    # 2. Determine margin 
+    margin = (IMAGE_SIZE - 2 * PADDING - n_matrix * CONTAINER_SIZE) / (n_matrix - 1)
 
-    # 2. Determine object size 
-    global OBJ_SIZE, EPSILON
-    EPSILON = int(round(JITTER * patch_size))
-    OBJ_SIZE = int(round(patch_size - 2 * EPSILON))
+    # 3. Determine epsilon 
+    global EPSILON
+    EPSILON = JITTER * MAX_EPSILON 
 
-    # 3. Determine center points 
+    # 4. Determine center points 
     pts = []
     for row in range(n_matrix):
-        y = PADDING + patch_size * (float(row) + 0.5) + row * margin 
+        y = PADDING + CONTAINER_SIZE * (float(row) + 0.5) + row * margin 
         for col in range(n_matrix):
-            x = PADDING + patch_size * (float(col) + 0.5) + col * margin 
+            x = PADDING + CONTAINER_SIZE * (float(col) + 0.5) + col * margin 
             pts.append((int(round(x)), int(round(y))))
     return pts
 
@@ -153,9 +158,9 @@ def set_runtime_geometry_circle(n_objects: int, padding: int, jitter: float):
     _set_runtime_geometry(n_objects, padding, jitter)
     POSITIONS = circle_positions()
 
-def set_runtime_geometry_grid(n_matrix: int, padding: int, margin_ration: float, jitter: float):
+def set_runtime_geometry_grid(n_matrix: int, padding: int, jitter: float):
     global POSITIONS
-    _set_runtime_geometry(n_matrix**2, padding, margin_ration, jitter)
+    _set_runtime_geometry(n_matrix**2, padding, jitter)
     POSITIONS = grid_positions(n_matrix)
 
 def _set_runtime_geometry(n_objects: int, padding: int, jitter: float):
