@@ -10,7 +10,7 @@ import random
 ALT_CATEGORY_NAMES = {'teddybears': ['teddybears', 'teddy_bears']}
 
 
-ALL_CATEGORIES = ['sheep', 'cattle', 'cats', 'horses', 'teddybears', 'kites', 'dogs', 'elephants', 'birds', 'bears', 'zebras', 'giraffes', 'umbrellas', 'backpacks', 'frisbees', 'suitcases']
+ALL_CATEGORIES = ['sheep', 'cattle', 'cats', 'horses', 'teddybears', 'kites', 'birds', 'dogs', 'umbrellas', 'elephants', 'bears', 'zebras', 'giraffes', 'backpacks', 'frisbees', 'suitcases']
 
 
 IMAGE_SIZE = 720
@@ -46,10 +46,10 @@ JITTER = None  # percentage of container size -> determines how much center of c
 EPSILON = None
 
 
-DEFAULT_N_IDENTICAL = 150
+DEFAULT_N_IDENTICAL = 120
 
 
-DEFAULT_N_DIFFERENT = 100
+DEFAULT_N_DIFFERENT = 180
 
 
 EARLY_SUCCESS_FIXATIONS = 3
@@ -77,7 +77,7 @@ DEFAULT_GIST_CHECKPOINTS = {
 
 def get_categories(n_objects: int):
     if n_objects <= 16:
-        return random.sample(ALL_CATEGORIES, n_objects)
+        return ALL_CATEGORIES[:n_objects]
     raise ValueError(f'Unsupported n_objects: {n_objects}. Maximal 16 allowed.')
 
 

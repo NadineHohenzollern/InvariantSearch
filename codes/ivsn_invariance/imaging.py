@@ -179,6 +179,22 @@ def render_cue(cue_path: Path, args, transform_spec: Optional[TransformSpec]=Non
     cue_t = alpha_paste_rgb(cue_t, cue_rgba_t, (runtime.OBJ_SIZE // 2, runtime.OBJ_SIZE // 2))
     return (cue_orig, cue_t)
 
+def render_target(target_path: Path, args, transform_spec: Optional[TransformSpec]=None) -> Tuple[Image.Image, Image.Image]:
+    # render original target
+    target_rgba = rescale_image(shift_cutout_to_center(load_rgba(target_path)))
+    target_orig = Image.new('RGB', (runtime.OBJ_SIZE, runtime.OBJ_SIZE), (128, 128, 128))
+    target_orig = alpha_paste_rgb(target_orig, target_rgba, (runtime.OBJ_SIZE // 2, runtime.OBJ_SIZE // 2))
+
+    # render transformed target
+    if transform_spec is None:
+        transform_spec = TransformSpec()
+
+    target_rgba_t = apply_transform_rgba(target_rgba, transform_spec, args, apply_smoothing=args.smooth_target)
+    target_t = Image.new('RGB', (runtime.OBJ_SIZE, runtime.OBJ_SIZE), (128, 128, 128))
+    target_t = alpha_paste_rgb(target_t, target_rgba_t, (runtime.OBJ_SIZE // 2, runtime.OBJ_SIZE // 2))
+
+    return (target_orig, target_t)
+
 def add_jitter_to_position(position: tuple):
     x, y = position
     x += random.uniform(-runtime.EPSILON, runtime.EPSILON)

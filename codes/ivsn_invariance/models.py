@@ -77,7 +77,20 @@ class ConvGistFeatureExtractor(nn.Module):
         super().__init__()
         out_channels_base = 128
         self.gist = Gist(**gist_config)
-        self.features = nn.Sequential(OrderedDict([('block1_conv', nn.Conv2d(self.gist.out_channels, out_channels_base, kernel_size=5, stride=2, padding=2, bias=conv_bias)), ('block1_relu', nn.ReLU()), ('block1_norm', nn.BatchNorm2d(out_channels_base)), ('block2_conv', nn.Conv2d(out_channels_base, out_channels_base * 2, kernel_size=3, stride=2, padding=1, bias=conv_bias)), ('block2_relu', nn.ReLU()), ('block2_norm', nn.BatchNorm2d(out_channels_base * 2)), ('block3_conv', nn.Conv2d(out_channels_base * 2, out_channels_base * 4, kernel_size=3, stride=2, padding=1, bias=conv_bias)), ('block3_relu', nn.ReLU()), ('block3_norm', nn.BatchNorm2d(out_channels_base * 4)), ('block4_conv', nn.Conv2d(out_channels_base * 4, out_channels_base * 4, kernel_size=3, stride=1, padding=1, bias=conv_bias)), ('block4_relu', nn.ReLU()), ('block4_norm', nn.BatchNorm2d(out_channels_base * 4))]))
+        self.features = nn.Sequential(OrderedDict([
+            ('block1_conv', nn.Conv2d(self.gist.out_channels, out_channels_base, kernel_size=5, stride=2, padding=2, bias=conv_bias)),
+            ('block1_relu', nn.ReLU()),
+            ('block1_norm', nn.BatchNorm2d(out_channels_base)),
+            ('block2_conv', nn.Conv2d(out_channels_base, out_channels_base * 2, kernel_size=3, stride=2, padding=1, bias=conv_bias)),
+            ('block2_relu', nn.ReLU()),
+            ('block2_norm', nn.BatchNorm2d(out_channels_base * 2)),
+            ('block3_conv', nn.Conv2d(out_channels_base * 2, out_channels_base * 4, kernel_size=3, stride=2, padding=1, bias=conv_bias)),
+            ('block3_relu', nn.ReLU()),
+            ('block3_norm', nn.BatchNorm2d(out_channels_base * 4)),
+            ('block4_conv', nn.Conv2d(out_channels_base * 4, out_channels_base * 4, kernel_size=3, stride=1, padding=1, bias=conv_bias)),
+            ('block4_relu', nn.ReLU()),
+            ('block4_norm', nn.BatchNorm2d(out_channels_base * 4))
+        ]))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.gist(x)
@@ -91,7 +104,20 @@ class ConvGistMLPFeatureExtractor(nn.Module):
         super().__init__()
         out_channels_base = 128
         self.gist = Gist(**gist_config)
-        self.features = nn.Sequential(OrderedDict([('block1_conv', nn.Conv2d(self.gist.out_channels, out_channels_base, kernel_size=5, stride=2, padding=2, bias=conv_bias)), ('block1_relu', nn.ReLU()), ('block1_norm', nn.BatchNorm2d(out_channels_base)), ('block2_conv', nn.Conv2d(out_channels_base, out_channels_base * 2, kernel_size=3, stride=2, padding=1, bias=conv_bias)), ('block2_relu', nn.ReLU()), ('block2_norm', nn.BatchNorm2d(out_channels_base * 2)), ('block3_conv', nn.Conv2d(out_channels_base * 2, out_channels_base * 4, kernel_size=3, stride=2, padding=1, bias=conv_bias)), ('block3_relu', nn.ReLU()), ('block3_norm', nn.BatchNorm2d(out_channels_base * 4)), ('block4_conv', nn.Conv2d(out_channels_base * 4, out_channels_base * 4, kernel_size=3, stride=1, padding=1, bias=conv_bias)), ('block4_relu', nn.ReLU()), ('block4_norm', nn.BatchNorm2d(out_channels_base * 4))]))
+        self.features = nn.Sequential(OrderedDict([
+            ('block1_conv', nn.Conv2d(self.gist.out_channels, out_channels_base, kernel_size=5, stride=2, padding=2, bias=conv_bias)),
+            ('block1_relu', nn.ReLU()),
+            ('block1_norm', nn.BatchNorm2d(out_channels_base)),
+            ('block2_conv', nn.Conv2d(out_channels_base, out_channels_base * 2, kernel_size=3, stride=2, padding=1, bias=conv_bias)),
+            ('block2_relu', nn.ReLU()),
+            ('block2_norm', nn.BatchNorm2d(out_channels_base * 2)),
+            ('block3_conv', nn.Conv2d(out_channels_base * 2, out_channels_base * 4, kernel_size=3, stride=2, padding=1, bias=conv_bias)),
+            ('block3_relu', nn.ReLU()),
+            ('block3_norm', nn.BatchNorm2d(out_channels_base * 4)),
+            ('block4_conv', nn.Conv2d(out_channels_base * 4, out_channels_base * 4, kernel_size=3, stride=1, padding=1, bias=conv_bias)),
+            ('block4_relu', nn.ReLU()),
+            ('block4_norm', nn.BatchNorm2d(out_channels_base * 4))
+        ]))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.gist(x)
@@ -131,20 +157,76 @@ def load_feature_extractor_weights(feature_extractor: nn.Module, checkpoint_path
 
 class BaseAttentionModel:
 
-    def position_scores(self, cue_img: Image.Image, search_img: Image.Image, positions: List[Tuple[int, int]]):
+    def __init__(self, device: str = 'cpu', attention_padding: int = 0):
+
+        self.device = torch.device(device)
+        self.attention_padding = attention_padding
+
+        self.backbone: nn.Module
+        self.maxpool: nn.Module
+
+    def preprocess(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
         raise NotImplementedError
+
+    @torch.no_grad()
+    def feature_map(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
+        x = self.preprocess(img, cue=cue)
+        x = self.backbone(x)
+        if cue:
+            x = self.maxpool(x)
+        return x
+    
+    @torch.no_grad()
+    def position_scores(
+        self,
+        cue_img: Image.Image,
+        search_img: Image.Image,
+        positions: List[Tuple[int, int]]
+    ):
+        cue_feat = self.feature_map(cue_img, cue=True)
+        search_feat = self.feature_map(search_img)
+    
+        attn = (search_feat * cue_feat).sum(dim=1, keepdim=True)
+        attn = F.relu(attn)
+
+        if self.attention_padding > 0:
+            p = self.attention_padding
+            attn = F.pad(attn, (p, p, p, p), mode='constant', value=0)
+
+        attn = attn / (attn.max() + 1e-8)
+        attn_up = F.interpolate(attn, size=(IMAGE_SIZE, IMAGE_SIZE), mode='bicubic', align_corners=False)
+        attn_np = attn_up.squeeze().detach().cpu().numpy()
+
+        scores = []
+        half = ORACLE_WINDOW // 2
+        for x, y in positions:
+            x1 = max(0, x - half)
+            x2 = min(IMAGE_SIZE, x + half)
+            y1 = max(0, y - half)
+            y2 = min(IMAGE_SIZE, y + half)
+            scores.append(float(attn_np[y1:y2, x1:x2].mean()))
+
+        return (attn_np, np.asarray(scores, dtype=np.float32))
 
 
 class VGGAttentionModel(BaseAttentionModel):
 
-    def __init__(self, device: str='cpu', attention_padding: int=0):
-        self.device = torch.device(device)
+    def __init__(
+        self,
+        device: str = 'cpu',
+        attention_padding: int = 0,
+    ):
+        super().__init__(device=device, attention_padding=attention_padding)
+        
         weights = models.VGG16_Weights.IMAGENET1K_V1
         vgg = models.vgg16(weights=weights).features.eval().to(self.device)
         self.backbone = vgg[:30].eval().to(self.device)
+
         self.maxpool = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
+
         for p in self.backbone.parameters():
             p.requires_grad = False
+
         t = weights.transforms()
         self.search_transform = transforms.Compose([
             transforms.ToImage(),
@@ -158,7 +240,6 @@ class VGGAttentionModel(BaseAttentionModel):
             transforms.ToDtype(torch.float32, scale=True),
             transforms.Normalize(mean=t.mean, std=t.std)
         ])
-        self.attention_padding = attention_padding
 
     def preprocess(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
         if cue:
@@ -168,110 +249,91 @@ class VGGAttentionModel(BaseAttentionModel):
 
         return img.unsqueeze(0).to(self.device)
 
-    @torch.no_grad()
-    def feature_map(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
-        x = self.preprocess(img, cue=cue)
-        x = self.backbone(x)
-        if cue:
-            x = self.maxpool(x)
-        return x
-
-    @torch.no_grad()
-    def position_scores(self, cue_img: Image.Image, search_img: Image.Image, positions: List[Tuple[int, int]]):
-        cue_feat = self.feature_map(cue_img, cue=True)
-        search_feat = self.feature_map(search_img)
-        attn = (search_feat * cue_feat).sum(dim=1, keepdim=True)
-        attn = F.relu(attn)
-        if self.attention_padding > 0:
-            attn = F.pad(
-                attn,
-                (self.attention_padding, self.attention_padding, self.attention_padding, self.attention_padding),
-                mode='constant',
-                value=0
-                )
-        attn = attn / (attn.max() + 1e-8)
-        attn_up = F.interpolate(attn, size=(IMAGE_SIZE, IMAGE_SIZE), mode='bilinear', align_corners=False)
-        attn_np = attn_up.squeeze().detach().cpu().numpy()
-        scores = []
-        half = ORACLE_WINDOW // 2
-        for x, y in positions:
-            x1 = max(0, x - half)
-            x2 = min(IMAGE_SIZE, x + half)
-            y1 = max(0, y - half)
-            y2 = min(IMAGE_SIZE, y + half)
-            scores.append(float(attn_np[y1:y2, x1:x2].mean()))
-        return (attn_np, np.asarray(scores, dtype=np.float32))
-
 
 class GistAttentionModel(BaseAttentionModel):
 
-    def __init__(self, feature_extractor: nn.Module, device: str='cpu', grayscale_input: bool=True, image_size: int=224):
-        self.device = torch.device(device)
+    def __init__(
+        self,
+        feature_extractor: nn.Module,
+        device: str = 'cpu',
+        grayscale_input: bool = True,
+        image_size: int = 224,
+        attention_padding: int = 0
+    ):
+        super().__init__(device=device, attention_padding=attention_padding)
+
         self.backbone = feature_extractor.eval().to(self.device)
         for p in self.backbone.parameters():
             p.requires_grad = False
-        tfs = [transforms.Resize((image_size, image_size))]
+
+        if isinstance(list(self.backbone.children())[-1], nn.MaxPool2d):
+            # If the last layer is a maxpool, we separate it from the backbone to allow for
+            # different processing of cue and search images.
+            self.maxpool = list(self.backbone.children())[-1]
+            self.backbone = nn.Sequential(*list(self.backbone.children())[:-1])
+        else:
+            self.maxpool = nn.Identity()
+
+        search_transform = [transforms.ToImage(), transforms.Resize((image_size, image_size))]
         if grayscale_input:
-            tfs.append(transforms.Grayscale(num_output_channels=1))
-        tfs.append(transforms.ToTensor())
-        self.transform = transforms.Compose(tfs)
+            search_transform.append(transforms.Grayscale(num_output_channels=1))
+        search_transform.append(transforms.ToDtype(torch.float32, scale=True))
+        self.search_transform = transforms.Compose(search_transform)
 
-    def preprocess(self, img: Image.Image) -> torch.Tensor:
-        return self.transform(img).unsqueeze(0).to(self.device)
+        cue_transform = [transforms.ToImage(), transforms.Resize((image_size // 7, image_size // 7))]
+        if grayscale_input:
+            cue_transform.append(transforms.Grayscale(num_output_channels=1))
+        cue_transform.append(transforms.ToDtype(torch.float32, scale=True))
+        self.cue_transform = transforms.Compose(cue_transform)
 
-    @torch.no_grad()
-    def feature_map(self, img: Image.Image) -> torch.Tensor:
-        return self.backbone(self.preprocess(img))
 
-    @torch.no_grad()
-    def position_scores(self, cue_img: Image.Image, search_img: Image.Image, positions: List[Tuple[int, int]]):
-        cue_feat = self.feature_map(cue_img)
-        search_feat = self.feature_map(search_img)
-        cue_vec = cue_feat.mean(dim=(2, 3), keepdim=True)
-        attn = (search_feat * cue_vec).sum(dim=1, keepdim=True)
-        attn = F.relu(attn)
-        attn_up = F.interpolate(attn, size=(IMAGE_SIZE, IMAGE_SIZE), mode='bilinear', align_corners=False)
-        attn_np = attn_up.squeeze().detach().cpu().numpy()
-        scores = []
-        half = ORACLE_WINDOW // 2
-        for x, y in positions:
-            x1 = max(0, x - half)
-            x2 = min(IMAGE_SIZE, x + half)
-            y1 = max(0, y - half)
-            y2 = min(IMAGE_SIZE, y + half)
-            scores.append(float(attn_np[y1:y2, x1:x2].mean()))
-        return (attn_np, np.asarray(scores, dtype=np.float32))
+    def preprocess(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
+        if cue:
+            img = self.cue_transform(img)
+        else:
+            img = self.search_transform(img)
+
+        return img.unsqueeze(0).to(self.device)
 
 
 def get_gist_config(args) -> dict:
+    
     gist_config = deepcopy(DEFAULT_GIST_CONFIG)
     if args.model_kind == 'vgg_gist_imagenet64' and args.gist_image_size == 64:
         gist_config['stride'] = 1
+
     return gist_config
 
 
 def build_attention_model(args) -> BaseAttentionModel:
+
     if args.model_kind == 'vgg':
-        return VGGAttentionModel(device=args.device)
+        return VGGAttentionModel(device=args.device, attention_padding=args.attention_padding)
+    
     gist_config = get_gist_config(args)
+
     if args.model_kind == 'vgg_gist_pretrained':
         feature_extractor = VGGGistPretrainedFeatureExtractor(gist_config)
         checkpoint = Path(args.vgg_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_pretrained'])
         load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'fusion.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size)
+        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
+
     if args.model_kind == 'vgg_gist_imagenet64':
         feature_extractor = VGGGistImageNet64FeatureExtractor(gist_config)
         checkpoint = Path(args.vgg_gist_imagenet64_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_imagenet64'])
         load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'fusion.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size)
+        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
+
     if args.model_kind == 'conv_gist':
         feature_extractor = ConvGistFeatureExtractor(gist_config)
         checkpoint = Path(args.conv_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['conv_gist'])
         load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size)
+        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
+
     if args.model_kind == 'conv_gist_mlp':
         feature_extractor = ConvGistMLPFeatureExtractor(gist_config)
         checkpoint = Path(args.conv_gist_mlp_checkpoint or DEFAULT_GIST_CHECKPOINTS['conv_gist_mlp'])
         load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size)
+        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
+
     raise ValueError(f'Unsupported model_kind: {args.model_kind}')
