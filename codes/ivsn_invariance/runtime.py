@@ -88,7 +88,7 @@ def circle_positions():
 
     # 2. Determine arrangement radius
     radius_patch = OBJ_SIZE // 2 
-    radius_container = radius_patch + 2 * EPSILON
+    radius_container = CONTAINER_SIZE // 2
     min_placement_radius = (N_POSITIONS * radius_container) // math.pi
     placement_radius = int(round((IMAGE_SIZE / 2) - PADDING - radius_container))
     placement_radius = max(min_placement_radius, placement_radius)
