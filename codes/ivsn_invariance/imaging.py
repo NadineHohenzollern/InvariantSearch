@@ -197,9 +197,9 @@ def render_target(target_path: Path, args, transform_spec: Optional[TransformSpe
 
 def add_jitter_to_position(position: tuple):
     x, y = position
-    x += random.uniform(-runtime.EPSILON, runtime.EPSILON)
-    y += random.uniform(-runtime.EPSILON, runtime.EPSILON)
-    return (x, y)
+    x += random.choice([-1, 1]) * runtime.EPSILON
+    y += random.choice([-1, 1]) * runtime.EPSILON
+    return (int(round(x)), int(round(y)))
 
 def render_search_display(target_path: Path, distractor_paths: List[Path], target_position: int, target_transform: TransformSpec, distractor_transforms: List[TransformSpec], args) -> Image.Image:
     # render target image

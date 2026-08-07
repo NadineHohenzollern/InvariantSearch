@@ -2,7 +2,7 @@
 
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from copy import deepcopy
 import random
 from . import runtime
@@ -135,7 +135,7 @@ def build_trials_from_base(
         else:
             cue_transform = TransformSpec()
 
-        distractor_transforms = [asdict(TransformSpec(rotation_deg=ang)) for ang in bt.distractor_rotations]
+        distractor_transforms = [asdict(replace(sweep_spec, rotation_deg=ang)) for ang in bt.distractor_rotations]
 
         trials.append(Trial(
             condition_name,

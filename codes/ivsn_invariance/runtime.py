@@ -16,16 +16,10 @@ ALL_CATEGORIES = ['sheep', 'cattle', 'cats', 'horses', 'teddybears', 'kites', 'b
 IMAGE_SIZE = 720
 
 
-OBJ_SIZE = None 
+OBJ_SIZE = 156 
 
 
 PADDING = None 
-
-# for circle:   
-#   MARGIN_RATIO = margin / (2 * patch_radius) 
-# for grid:     
-#   MARGIN_RATIO = margin / patch_size
-MARGIN_RATIO = None
 
 
 CATEGORIES = None
@@ -44,6 +38,12 @@ JITTER = None  # percentage of container size -> determines how much center of c
 
 
 EPSILON = None
+
+
+MAX_EPSILON = int(round(0.15 * OBJ_SIZE))
+
+
+CONTAINER_SIZE = OBJ_SIZE + 2 * MAX_EPSILON
 
 
 DEFAULT_N_IDENTICAL = 120
@@ -82,19 +82,21 @@ def get_categories(n_objects: int):
 
 
 def circle_positions():
-    # 1. Determine patch size
-    patch_radius = (2 * math.pi * ((IMAGE_SIZE / 2) - PADDING)) / (2 * N_POSITIONS + (N_POSITIONS + 1) * MARGIN_RATIO * 2 - 2 * math.pi)
+    # 1. Determine epsilon 
+    global EPSILON
+    EPSILON = int(round(JITTER * MAX_EPSILON))  
 
-    # 2. Determine object size 
-    global OBJ_SIZE, EPSILON
-    EPSILON = int(round(JITTER * 2 * patch_radius))
-    OBJ_SIZE = int(round((patch_radius - EPSILON) * 2))
+    # 2. Determine arrangement radius
+    radius_patch = OBJ_SIZE // 2 
+    radius_container = CONTAINER_SIZE // 2
+    min_placement_radius = (N_POSITIONS * radius_container) // math.pi
+    placement_radius = int(round((IMAGE_SIZE / 2) - PADDING - radius_container))
+    placement_radius = max(min_placement_radius, placement_radius)
 
     # 3. Determine center points 
     center = IMAGE_SIZE // 2
     pts = []
     angle_step = 2 * math.pi / N_POSITIONS
-    placement_radius = IMAGE_SIZE / 2 - PADDING - patch_radius
     for i in range(N_POSITIONS):
         x = center + int(round(math.cos(i * angle_step) * placement_radius)) 
         y = center + int(round(math.sin(i * angle_step) * placement_radius)) 
@@ -111,22 +113,24 @@ def grid_positions(n_matrix: int):
     Returns: 
         []: list of object cutoff center coordinates in grid map fashion 
     """
+    # 1. Constrain padding  
+    global PADDING
+    max_padding = (IMAGE_SIZE - n_matrix * CONTAINER_SIZE) // 2 
+    PADDING = min(PADDING, max_padding)
 
-    # 1. Determine patch size and margin
-    patch_size = int(round((IMAGE_SIZE - 2 * PADDING) / (n_matrix + (n_matrix - 1) * MARGIN_RATIO)))
-    margin = int(round(patch_size * MARGIN_RATIO))
+    # 2. Determine margin 
+    margin = (IMAGE_SIZE - 2 * PADDING - n_matrix * CONTAINER_SIZE) / (n_matrix - 1)
 
-    # 2. Determine object size 
-    global OBJ_SIZE, EPSILON
-    EPSILON = int(round(JITTER * patch_size))
-    OBJ_SIZE = int(round(patch_size - 2 * EPSILON))
+    # 3. Determine epsilon 
+    global EPSILON
+    EPSILON = JITTER * MAX_EPSILON 
 
-    # 3. Determine center points 
+    # 4. Determine center points 
     pts = []
     for row in range(n_matrix):
-        y = PADDING + patch_size * (float(row) + 0.5) + row * margin 
+        y = PADDING + CONTAINER_SIZE * (float(row) + 0.5) + row * margin 
         for col in range(n_matrix):
-            x = PADDING + patch_size * (float(col) + 0.5) + col * margin 
+            x = PADDING + CONTAINER_SIZE * (float(col) + 0.5) + col * margin 
             pts.append((int(round(x)), int(round(y))))
     return pts
 
@@ -149,22 +153,21 @@ def load_font(size=18):
         return ImageFont.load_default()
 
 
-def set_runtime_geometry_circle(n_objects: int, padding: int, margin_ration: float, jitter: float):
+def set_runtime_geometry_circle(n_objects: int, padding: int, jitter: float):
     global POSITIONS
-    _set_runtime_geometry(n_objects, padding, margin_ration, jitter)
+    _set_runtime_geometry(n_objects, padding, jitter)
     POSITIONS = circle_positions()
 
-def set_runtime_geometry_grid(n_matrix: int, padding: int, margin_ration: float, jitter: float):
+def set_runtime_geometry_grid(n_matrix: int, padding: int, jitter: float):
     global POSITIONS
-    _set_runtime_geometry(n_matrix**2, padding, margin_ration, jitter)
+    _set_runtime_geometry(n_matrix**2, padding, jitter)
     POSITIONS = grid_positions(n_matrix)
 
-def _set_runtime_geometry(n_objects: int, padding: int, margin_ration: float, jitter: float):
-    global CATEGORIES, N_POSITIONS, MAX_FIXATIONS, PADDING, MARGIN_RATIO, JITTER
+def _set_runtime_geometry(n_objects: int, padding: int, jitter: float):
+    global CATEGORIES, N_POSITIONS, MAX_FIXATIONS, PADDING, JITTER
     CATEGORIES = get_categories(n_objects)
     N_POSITIONS = n_objects
     MAX_FIXATIONS = n_objects
     PADDING = padding 
-    MARGIN_RATIO = margin_ration
     JITTER = jitter
 
