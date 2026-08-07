@@ -334,14 +334,14 @@ def save_grouped_bar_plot(
                  yerr=yerr, capsize = 3, ecolor="black")
 
     if y_chance_level is not None:
-        plt.axhline(y=y_chance_level, color='gray', linestyle='--')
+        plt.axhline(y=y_chance_level, color='gray', linestyle='--', label='Chance')
 
     plt.xticks(x, [f'{v:g}' for v in x_vals])
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.title(title)
 
-    if n_series > 1:
+    if n_series > 1 or y_chance_level is not None:
         plt.legend()
 
     if y_lim is not None:
