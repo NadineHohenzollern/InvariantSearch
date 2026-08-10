@@ -80,6 +80,7 @@ def run_trial(model: BaseAttentionModel, trial: Trial, args) -> dict:
         'trial_type': trial.trial_type,
         'target_category': trial.target_category,
         'target_position': trial.target_position,
+        'n_objects': args.n_objects,
         'n_fixations': len(fix_positions),
         'found': bool(found),
         'found_within_3_fixations': found_within_3,

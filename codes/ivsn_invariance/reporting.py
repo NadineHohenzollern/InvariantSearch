@@ -32,14 +32,13 @@ def summarize_subset(rows: List[dict]) -> dict:
     if not rows:
         return {
             'n_trials': 0,
+            'n_objects': None,
             'mean_fixations': None,
             'std_fixations': None,
             'margin_of_error_fixations': None,
             'accuracy_by_n_fixations': None,
-            'found_within_k_fixations_count': None,
+            'found_within_k_fixations_count': 0,
             'found_within_k_fixations_rate': None,
-            'found_within_3_fixations_rate': None,
-            'found_within_3_fixations_count': 0,
             'not_found_within_3_fixations_count': 0,
             'mean_score_target': None,
             'std_score_target': None,
@@ -73,18 +72,19 @@ def summarize_subset(rows: List[dict]) -> dict:
     target_rank = np.array([r['target_rank'] for r in rows], dtype=np.float32)
     p_target = np.array([r['p_target'] for r in rows], dtype=np.float32)
 
-    max_fixations = int(fix.max())
-    found_within_k_fixations_count = np.array([(fix <= k).sum() for k in range(1, max_fixations + 1)])
+    n_objects = int(rows[0]['n_objects'])
+    found_within_k_fixations_count = np.array([(fix <= k).sum() for k in range(1, n_objects + 1)])
     found_within_k_fixations_rate = np.round(found_within_k_fixations_count / len(rows), decimals=3)
 
     return {
         'n_trials': int(len(rows)),
+        'n_objects': n_objects,
         'mean_fixations': float(fix.mean()),
         'std_fixations': float(fix.std(ddof=0)),
         'margin_of_error_fixations': float(margin_of_error(fix)),
         'accuracy_by_n_fixations': float(found.mean()),
-        **{f"found_within_{k}_fixations_count": int(count) for k, count in enumerate(found_within_k_fixations_count, start=1)},
-        **{f"found_within_{k}_fixations_rate": float(rate) for k, rate in enumerate(found_within_k_fixations_rate, start=1)},
+        **{f"found_within_{k+1}_fixations_count": int(found_within_k_fixations_count[k]) for k in range(n_objects)},
+        **{f"found_within_{k+1}_fixations_rate": float(found_within_k_fixations_rate[k]) for k in range(n_objects)},
         'not_found_within_3_fixations_count': int(len(rows) - found3.sum()),
         'mean_score_target': float(score_target.mean()),
         'std_score_target': float(score_target.std(ddof=0)),
