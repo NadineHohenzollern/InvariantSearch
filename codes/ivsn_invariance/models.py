@@ -266,12 +266,14 @@ class GistAttentionModel(BaseAttentionModel):
         for p in self.backbone.parameters():
             p.requires_grad = False
 
-        if isinstance(list(self.backbone.children())[-1], nn.MaxPool2d):
-            # If the last layer is a maxpool, we separate it from the backbone to allow for
+        if isinstance(self.backbone.features[-1], nn.MaxPool2d):
+            # If the last layer is a maxpool (VGG Model), we separate it from the backbone to allow for
             # different processing of cue and search images.
-            self.maxpool = list(self.backbone.children())[-1]
-            self.backbone = nn.Sequential(*list(self.backbone.children())[:-1])
+            self.maxpool = self.backbone.features[-1]
+            self.backbone.features[-1] = nn.Identity() 
         else:
+            # Otherwise the model is ConvGist, which does not have a maxpool at the end,
+            # so we dont use a maxpool. Now search image output will be 7 x 7 instead.
             self.maxpool = nn.Identity()
 
         search_transform = [transforms.ToImage(), transforms.Resize((image_size, image_size))]
