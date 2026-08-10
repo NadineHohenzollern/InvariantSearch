@@ -26,4 +26,4 @@ codes/logs/
 codes/dataset/
 
 # Testing 
-testing.ipynb
+testing*.ipynb
