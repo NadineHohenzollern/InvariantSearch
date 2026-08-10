@@ -1,9 +1,15 @@
 python codes/ivsn_invariant_search.py \
-  --data-root /path/to/data \
-  --out-dir codes/outputs/result1 \
+  --data-root ../../../Data/IVSN/datasets/array_16cat \
+  --out-dir codes/outputs/rotation-4 \
+  --device cuda \
   --arrangement circle \
   --n-objects 6 \
   --transform-mode rotation \
+  --rotation-values 0 30 \
+  --jitter 0.2 \
+  --smoothing-mode cosine \
+  --edge-taper-width-px 3 \
+  --smooth-target \
+  --smooth-cue \
+  --smooth-distractors \
   --model-kind vgg \
-  --device cuda \
-  --attention-padding 0 \
