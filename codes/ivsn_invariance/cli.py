@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument('--jitter', type=float, default=0)
     parser.add_argument('--transform-mode', type=str, choices=['original', 'rotation', 'scale', 'shift_x', 'shift_y', 'skew_x', 'skew_y', 'noise', 'blur', 'mixed'], required=True)
     parser.add_argument('--rotation-values', type=float, nargs='*', default=[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330])
-    parser.add_argument('--scale-values', type=float, nargs='*', default=[0.5, 1.5])
+    parser.add_argument('--scale-values', type=float, nargs='*', default=[0.5, 1.0, 1.5])
     parser.add_argument('--shift-values', type=float, nargs='*', default=[-30, -15, 0, 15, 30])
     parser.add_argument('--skew-values', type=float, nargs='*', default=[-20, -10, 0, 10, 20])
     parser.add_argument('--noise-values', type=float, nargs='*', default=[0.0, 0.03, 0.06, 0.09, 0.12])
