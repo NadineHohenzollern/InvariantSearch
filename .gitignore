@@ -24,3 +24,6 @@ codes/logs/
 
 # Local datasets
 codes/dataset/
+
+# Testing 
+testing.ipynb
