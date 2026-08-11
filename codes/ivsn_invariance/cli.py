@@ -81,6 +81,9 @@ def main():
     )
     from .visualization import save_examples
 
+    if args.transform_mode == 'scale' and args.jitter > 0:
+        print(f"WARNING: Overlaps or cutoffs may occur. If unwanted, ensure to use jitter = 0 when applying scale > 1 transformation.")
+
     if args.smoothing_mode != 'none':
         if not (args.smooth_target or args.smooth_cue or args.smooth_distractors):
             args.smooth_target = True
