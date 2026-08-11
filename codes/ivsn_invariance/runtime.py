@@ -129,7 +129,12 @@ def grid_positions(n_matrix: int):
     # 1. Constrain padding  
     global PADDING
     max_padding = (IMAGE_SIZE - n_matrix * CONTAINER_SIZE) // 2 
-    PADDING = min(PADDING, max_padding)
+    if PADDING > max_padding:
+        print(f"WARNING: Given padding '{PADDING}' is overwritten by maximal padding '{max_padding}', because otherwise it may produce overlaps. Choose padding for {N_POSITIONS} objects within range [0, {max_padding}].")
+        PADDING = max_padding
+    elif PADDING < 0:
+        print(f"WARNING: Given padding '{PADDING}' is overwritten by minimal padding '{0}'. Choose padding for {N_POSITIONS} objects within range [0, {max_padding}].")
+        PADDING = max_padding
 
     # 2. Determine margin 
     margin = (IMAGE_SIZE - 2 * PADDING - n_matrix * CONTAINER_SIZE) / (n_matrix - 1)
@@ -174,7 +179,7 @@ def set_runtime_geometry_circle(n_objects: int, radius: int, jitter: float):
 def set_runtime_geometry_grid(n_matrix: int, padding: int, jitter: float):
     global POSITIONS, PADDING
     PADDING = padding
-    _set_runtime_geometry(n_matrix**2, padding, jitter)
+    _set_runtime_geometry(n_matrix**2, jitter)
     POSITIONS = grid_positions(n_matrix)
 
 def _set_runtime_geometry(n_objects: int, jitter: float):
