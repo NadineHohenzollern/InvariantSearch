@@ -19,7 +19,7 @@ IMAGE_SIZE = 720
 OBJ_SIZE = 156 
 
 
-PADDING = None 
+PADDING = None
 
 
 CATEGORIES = None
@@ -44,6 +44,12 @@ MAX_EPSILON = int(round(0.15 * OBJ_SIZE))
 
 
 CONTAINER_SIZE = OBJ_SIZE + 2 * MAX_EPSILON
+
+
+RADIUS = None 
+
+
+MAX_RADIUS = (IMAGE_SIZE - CONTAINER_SIZE) // 2
 
 
 DEFAULT_N_IDENTICAL = 120
@@ -81,17 +87,24 @@ def get_categories(n_objects: int):
     raise ValueError(f'Unsupported n_objects: {n_objects}. Maximal 16 allowed.')
 
 
-def circle_positions():
+def circle_positions(radius: int):
     # 1. Determine epsilon 
     global EPSILON
     EPSILON = int(round(JITTER * MAX_EPSILON))  
 
-    # 2. Determine arrangement radius
-    radius_patch = OBJ_SIZE // 2 
+    # 2. Constrain arrangement radius
     radius_container = CONTAINER_SIZE // 2
-    min_placement_radius = (N_POSITIONS * radius_container) // math.pi
-    placement_radius = int(round((IMAGE_SIZE / 2) - PADDING - radius_container))
-    placement_radius = max(min_placement_radius, placement_radius)
+    min_placement_radius = int(round(radius_container / math.sin(math.pi / N_POSITIONS))) 
+    if radius == None:
+        placement_radius = MAX_RADIUS
+    elif radius < min_placement_radius:
+        placement_radius = min_placement_radius
+        print(f"WARNING: Given radius '{radius}' is overwritten by minimal radius '{min_placement_radius}', because otherwise it may produce overlaps. Choose radius for {N_POSITIONS} objects within range [{min_placement_radius}, {MAX_RADIUS}].")
+    elif radius > MAX_RADIUS:
+        placement_radius = MAX_RADIUS
+        print(f"WARNING: Given radius '{radius}' is overwritten by maximal radius '{MAX_RADIUS}', because otherwise it exceeds the image borders. Choose radius for {N_POSITIONS} within range [{min_placement_radius}, {MAX_RADIUS}].")
+    else: 
+        placement_radius = radius
 
     # 3. Determine center points 
     center = IMAGE_SIZE // 2
@@ -153,21 +166,21 @@ def load_font(size=18):
         return ImageFont.load_default()
 
 
-def set_runtime_geometry_circle(n_objects: int, padding: int, jitter: float):
+def set_runtime_geometry_circle(n_objects: int, radius: int, jitter: float):
     global POSITIONS
-    _set_runtime_geometry(n_objects, padding, jitter)
-    POSITIONS = circle_positions()
+    _set_runtime_geometry(n_objects, jitter)
+    POSITIONS = circle_positions(radius)
 
 def set_runtime_geometry_grid(n_matrix: int, padding: int, jitter: float):
-    global POSITIONS
+    global POSITIONS, PADDING
+    PADDING = padding
     _set_runtime_geometry(n_matrix**2, padding, jitter)
     POSITIONS = grid_positions(n_matrix)
 
-def _set_runtime_geometry(n_objects: int, padding: int, jitter: float):
-    global CATEGORIES, N_POSITIONS, MAX_FIXATIONS, PADDING, JITTER
+def _set_runtime_geometry(n_objects: int, jitter: float):
+    global CATEGORIES, N_POSITIONS, MAX_FIXATIONS, JITTER
     CATEGORIES = get_categories(n_objects)
     N_POSITIONS = n_objects
     MAX_FIXATIONS = n_objects
-    PADDING = padding 
     JITTER = jitter
 

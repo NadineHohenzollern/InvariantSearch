@@ -21,6 +21,7 @@ def parse_args():
     parser.add_argument('--n-objects', choices=[6, 8], type=int, default=8)
     parser.add_argument('--n-matrix', choices=[2, 3, 4], type=int, default=3) 
     parser.add_argument('--padding', type=int, default=30)
+    parser.add_argument('--radius', type=int, default=None)
     parser.add_argument('--jitter', type=float, default=0)
     parser.add_argument('--transform-mode', type=str, choices=['original', 'rotation', 'scale', 'shift_x', 'shift_y', 'skew_x', 'skew_y', 'noise', 'blur', 'mixed'], required=True)
     parser.add_argument('--rotation-values', type=float, nargs='*', default=[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330])
@@ -88,7 +89,7 @@ def main():
 
     n_objects = None
     if args.arrangement == 'circle':
-        set_runtime_geometry_circle(args.n_objects, args.padding, args.jitter)
+        set_runtime_geometry_circle(args.n_objects, args.radius, args.jitter)
         n_objects = args.n_objects
 
     elif args.arrangement == 'grid':
