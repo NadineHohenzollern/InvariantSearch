@@ -147,6 +147,63 @@ example with `sbatch codes/scripts/run_vgg.sh`.
 Each experiment writes trial manifests, per-trial JSON/CSV results, grouped
 summaries, plots, and optional example visualizations below `--out-dir`.
 
+## VGG feature-representation analysis
+
+The feature-analysis entry point compares two search displays that are
+pixel-identical except for the target transformation. It measures corresponding
+target-region feature vectors at VGG feature-module cut points 16, 23, and 30,
+using 5 x 5, 3 x 3, and 1 x 1 regions respectively. It also computes effective
+receptive fields (ERFs) by taking the absolute input gradient for each selected
+spatial cell and superimposing the resulting saliency maps.
+
+```bash
+python codes/analyze_vgg_features.py \
+  --data-root /path/to/dataset \
+  --out-dir codes/outputs/feature_rotation \
+  --transform-mode rotation \
+  --rotation-values 0 30 60 90 120 150 180 \
+  --n-objects 8 \
+  --device cuda
+```
+
+The output contains:
+
+- `feature_cell_distances.csv`: Euclidean, channel-normalized RMS Euclidean,
+  and cosine distances for every corresponding spatial cell.
+- `feature_trial_distances.csv`: target-region means for every trial and layer.
+- `grouped_feature_distances.csv`: means and 95% confidence intervals for all,
+  target-identical, and target-different trials.
+- `plots/`: grouped bar charts for strict cellwise, pooled, and spatially
+  tolerant feature distances.
+- `cue_target_cell_metrics.csv`, `cue_target_trial_metrics.csv`, and
+  `grouped_cue_target_metrics.csv`: comparisons between the pooled cue and the
+  original/transformed search-target representation. These make the
+  target-identical versus target-different split directly meaningful.
+- `cue_target_plots/`: cue-to-target similarity, similarity-loss, and distance
+  plots for each layer.
+- `search_performance.csv` and `grouped_search_performance.csv`: layer-30
+  IVSN-compatible target attention scores, margins, ranks, probabilities, and
+  fixation counts before and after the target transformation.
+- `feature_performance_correlations.csv` and `correlation_plots/`: Pearson and
+  Spearman associations between representation changes and search performance.
+- `distance_matrix_examples/`: explicit 1 x 1, 3 x 3, and 5 x 5 cell-distance
+  heatmaps for the selected examples.
+- `erf_examples/`: paired ERF figures and compressed raw saliency arrays.
+- `erf_example_metrics.csv`: scale-independent ERF distances plus mass overlap,
+  centroid displacement, spread, and 90%-mass area for visualized examples.
+
+ERF computation is substantially more expensive than feature extraction. Use
+`--erf-examples-per-group 0` for quantitative-only runs, or choose another
+positive count for more qualitative examples. Layer regions can be overridden,
+for example with `--layer-windows 16:5 23:3 30:1`.
+
+The strict corresponding-cell metric measures both feature change and spatial
+rearrangement. Mean/max-pooled metrics and symmetric nearest-cell distances are
+reported alongside it to distinguish invariance from local equivariance. Cue
+features use a 32 x 32 input and adaptive max pooling by default, matching the
+original VGG IVSN cue path at layer 30; use `--cue-size` only when intentionally
+testing a different cue resolution.
+
 ## Original IVSN publication
 
 The original IVSN model was published in *Nature Communications*:
