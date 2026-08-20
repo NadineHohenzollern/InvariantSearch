@@ -164,9 +164,16 @@ class BaseAttentionModel:
 
         self.backbone: nn.Module
         self.maxpool: nn.Module
+        self.cue_transform: nn.Module
+        self.search_transform: nn.Module
 
     def preprocess(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
-        raise NotImplementedError
+        if cue:
+            img = self.cue_transform(img)
+        else:
+            img = self.search_transform(img)
+
+        return img.unsqueeze(0).to(self.device)
 
     @torch.no_grad()
     def feature_map(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
@@ -241,13 +248,65 @@ class VGGAttentionModel(BaseAttentionModel):
             transforms.Normalize(mean=t.mean, std=t.std)
         ])
 
-    def preprocess(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
-        if cue:
-            img = self.cue_transform(img)
-        else:
-            img = self.search_transform(img)
 
-        return img.unsqueeze(0).to(self.device)
+class VOneNetAttentionModel(BaseAttentionModel):
+
+    def __init__(
+        self,
+        backbone: str = "alexnet",
+        device: str = 'cpu',
+        attention_padding: int = 0,
+    ):
+        super().__init__(device=device, attention_padding=attention_padding)
+
+        from vonenet import get_model
+
+        vonenet_model = get_model(
+            model_arch = backbone,
+            pretrained = True,
+            map_location = device,
+        ).module
+
+        if backbone == "alexnet":
+
+            self.backbone = nn.Sequential(
+                vonenet_model.vone_block,
+                vonenet_model.bottleneck,
+                vonenet_model.model.features[:-1]  # Exclude the last maxpool layer,
+            )
+            self.maxpool = vonenet_model.model.features[-1]  # The last maxpool layer
+
+        elif backbone == "resnet50":
+            self.backbone = nn.Sequential(
+                vonenet_model.vone_block,
+                vonenet_model.bottleneck,
+                vonenet_model.model.layer1,
+                vonenet_model.model.layer2,
+                vonenet_model.model.layer3,
+            )
+            self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2) 
+
+        else:
+            raise ValueError(f"Unsupported backbone: {backbone}")
+
+        self.backbone = self.backbone.eval().to(self.device)
+        self.maxpool = self.maxpool.eval().to(self.device)
+
+        for p in self.backbone.parameters():
+            p.requires_grad = False
+
+        self.search_transform = transforms.Compose([
+            transforms.ToImage(),
+            transforms.Resize((224, 224)),
+            transforms.ToDtype(torch.float32, scale=True),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        ])
+        self.cue_transform = transforms.Compose([
+            transforms.ToImage(),
+            transforms.Resize((32, 32)),
+            transforms.ToDtype(torch.float32, scale=True),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        ])
 
 
 class GistAttentionModel(BaseAttentionModel):
@@ -289,15 +348,6 @@ class GistAttentionModel(BaseAttentionModel):
         self.cue_transform = transforms.Compose(cue_transform)
 
 
-    def preprocess(self, img: Image.Image, cue: bool = False) -> torch.Tensor:
-        if cue:
-            img = self.cue_transform(img)
-        else:
-            img = self.search_transform(img)
-
-        return img.unsqueeze(0).to(self.device)
-
-
 def get_gist_config(args) -> dict:
     
     gist_config = deepcopy(DEFAULT_GIST_CONFIG)
@@ -310,7 +360,17 @@ def get_gist_config(args) -> dict:
 def build_attention_model(args) -> BaseAttentionModel:
 
     if args.model_kind == 'vgg':
-        return VGGAttentionModel(device=args.device, attention_padding=args.attention_padding)
+        return VGGAttentionModel(
+            device=args.device,
+            attention_padding=args.attention_padding
+        )
+
+    if args.model_kind == 'vonenet':
+        return VOneNetAttentionModel(
+            backbone=args.vonenet_backbone,
+            device=args.device,
+            attention_padding=args.attention_padding
+        )
     
     gist_config = get_gist_config(args)
 

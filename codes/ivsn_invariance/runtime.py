@@ -67,7 +67,29 @@ ORACLE_WINDOW = 45
 SEED = 0
 
 
-DEFAULT_GIST_CONFIG = dict(in_channels=1, mode='dynamic', fmax=0.35, fratio=1.7, k=0.52, n_scales=4, n_orientations=6, n_phases=2, scale=25, gaussian=True, gaussian_inverse=False, n_stds=3, dc_compensate=True, stride=4, energy=True, energy_mode='substitute', divisive_norm=False, pooling=None, pool_size=16, pool_stride=16, flatten=False)
+DEFAULT_GIST_CONFIG = dict(
+    in_channels=1,
+    mode='dynamic',
+    fmax=.35,
+    fratio=1.7,
+    k=0.52,
+    n_scales=4,
+    n_orientations=6,
+    n_phases=2,
+    scale=25,
+    gaussian=True,
+    gaussian_inverse=False,
+    n_stds=3,
+    dc_compensate=True,
+    stride=4,
+    energy=True,
+    energy_mode='substitute',
+    divisive_norm=False,
+    pooling=None,
+    pool_size=16,
+    pool_stride=16,
+    flatten=False
+)
 
 
 CODES_DIR = Path(__file__).resolve().parents[1]
