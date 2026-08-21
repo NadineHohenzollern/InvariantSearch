@@ -51,6 +51,29 @@ class VGGGistPretrainedFeatureExtractor(nn.Module):
         return x
 
 
+class VGGNetGistFeatureExtractor(nn.Module):
+    """
+    Older VGG+Gist model:
+    gist -> fusion(25->128) -> VGG tail from layer 10 onward
+    """
+
+    def __init__(self, gist_config: dict):
+        super().__init__()
+        self.gist = Gist(**gist_config)
+        self.fusion = nn.Sequential(OrderedDict([
+            ("conv", nn.Conv2d(self.gist.out_channels, 128, kernel_size=1, stride=1, bias=False)),
+            ("relu", nn.ReLU())
+        ]))
+        vgg = models.vgg16(weights='DEFAULT')
+        self.features = nn.Sequential(*list(vgg.features.children())[10:])
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.gist(x)
+        x = self.fusion(x)
+        x = self.features(x)
+        return x
+
+
 class VGGGistImageNet64FeatureExtractor(nn.Module):
     """
     New 64-trained VGG+Gist model from colleague example:
@@ -374,28 +397,50 @@ def build_attention_model(args) -> BaseAttentionModel:
     
     gist_config = get_gist_config(args)
 
-    if args.model_kind == 'vgg_gist_pretrained':
-        feature_extractor = VGGGistPretrainedFeatureExtractor(gist_config)
-        checkpoint = Path(args.vgg_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_pretrained'])
-        load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'fusion.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
+    if "gist" in args.model_kind:
 
-    if args.model_kind == 'vgg_gist_imagenet64':
-        feature_extractor = VGGGistImageNet64FeatureExtractor(gist_config)
-        checkpoint = Path(args.vgg_gist_imagenet64_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_imagenet64'])
-        load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'fusion.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
+        if args.model_kind == 'vgg_gist_pretrained':
+            feature_extractor = VGGGistPretrainedFeatureExtractor(gist_config)
+            checkpoint = Path(args.vgg_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_pretrained'])
+            allowed_prefixes = ('gist.', 'fusion.', 'features.')
 
-    if args.model_kind == 'conv_gist':
-        feature_extractor = ConvGistFeatureExtractor(gist_config)
-        checkpoint = Path(args.conv_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['conv_gist'])
-        load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
 
-    if args.model_kind == 'conv_gist_mlp':
-        feature_extractor = ConvGistMLPFeatureExtractor(gist_config)
-        checkpoint = Path(args.conv_gist_mlp_checkpoint or DEFAULT_GIST_CHECKPOINTS['conv_gist_mlp'])
-        load_feature_extractor_weights(feature_extractor, checkpoint, allowed_prefixes=('gist.', 'features.'), device=torch.device(args.device))
-        return GistAttentionModel(feature_extractor, device=args.device, grayscale_input=True, image_size=args.gist_image_size, attention_padding=args.attention_padding)
+        elif args.model_kind == 'vgg_gist_new':
+            feature_extractor = VGGNetGistFeatureExtractor(gist_config)
+            checkpoint = Path(args.vgg_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_new'])
+            allowed_prefixes = ('gist.', 'fusion.', 'features.')
+
+        elif args.model_kind == 'vgg_gist_imagenet64':
+            feature_extractor = VGGGistImageNet64FeatureExtractor(gist_config)
+            checkpoint = Path(args.vgg_gist_imagenet64_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_imagenet64'])
+            allowed_prefixes = ('gist.', 'fusion.', 'features.')
+
+        elif args.model_kind == 'conv_gist':
+            feature_extractor = ConvGistFeatureExtractor(gist_config)
+            checkpoint = Path(args.conv_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['conv_gist'])
+            allowed_prefixes = ('gist.', 'features.')
+
+        elif args.model_kind == 'conv_gist_mlp':
+            feature_extractor = ConvGistMLPFeatureExtractor(gist_config)
+            checkpoint = Path(args.conv_gist_mlp_checkpoint or DEFAULT_GIST_CHECKPOINTS['conv_gist_mlp'])
+            allowed_prefixes = ('gist.', 'features.')
+
+        else:
+            raise ValueError(f'Unsupported model_kind: {args.model_kind}')
+
+        load_feature_extractor_weights(
+            feature_extractor,
+            checkpoint,
+            allowed_prefixes=allowed_prefixes,
+            device=torch.device(args.device)
+        )
+
+        return GistAttentionModel(
+            feature_extractor,
+            device=args.device,
+            grayscale_input=True,
+            image_size=args.gist_image_size,
+            attention_padding=args.attention_padding
+        )
 
     raise ValueError(f'Unsupported model_kind: {args.model_kind}')
