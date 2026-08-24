@@ -5,12 +5,15 @@ import unittest
 import numpy as np
 import torch
 
+from codes.ivsn_invariance.domain import TransformSpec
 from codes.ivsn_invariance.target_feature_analysis import (
     activation_difference_metrics,
     full_layer_erf,
 )
 from codes.ivsn_invariance.target_feature_cli import TargetRecord, select_erf_records
 from codes.ivsn_invariance.target_feature_reporting import (
+    align_erf_to_original,
+    aligned_erf_metrics,
     build_grouped_target_activation_summary,
 )
 
@@ -71,6 +74,27 @@ class TargetFeatureAnalysisTests(unittest.TestCase):
             summary['std_mean_absolute_difference_all'],
             np.sqrt(2.0),
         )
+
+    def test_identity_erf_alignment_preserves_map(self):
+        values = np.zeros((32, 32), dtype=np.float32)
+        values[8:14, 18:24] = 1.0
+        aligned = align_erf_to_original(values, TransformSpec())
+        np.testing.assert_allclose(aligned, values, atol=0.06)
+
+    def test_inverse_rotation_alignment_recovers_spatial_pattern(self):
+        original = np.zeros((32, 32), dtype=np.float32)
+        original[5:11, 19:25] = 1.0
+        transformed = align_erf_to_original(
+            original,
+            TransformSpec(rotation_deg=-90.0),
+        )
+        recovered = align_erf_to_original(
+            transformed,
+            TransformSpec(rotation_deg=90.0),
+        )
+        metrics = aligned_erf_metrics(original, transformed, recovered)
+        self.assertGreater(metrics['aligned_erf_mass_overlap'], 0.90)
+        self.assertGreater(metrics['erf_alignment_gain_mass_overlap'], 0.50)
 
 
 if __name__ == '__main__':

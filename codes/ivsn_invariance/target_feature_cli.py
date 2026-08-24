@@ -14,7 +14,7 @@ from .data import (
     save_base_manifest,
 )
 from .domain import BaseTrial
-from .feature_analysis import VGG16FeatureProbe, erf_distance_metrics
+from .feature_analysis import VGG16FeatureProbe
 from .feature_reporting import write_rows_csv
 from .target_feature_analysis import (
     activation_difference_metrics,
@@ -22,7 +22,12 @@ from .target_feature_analysis import (
 )
 from .target_feature_imaging import render_paired_targets
 from .target_feature_reporting import (
+    align_erf_to_original,
+    aligned_erf_metrics,
+    build_grouped_aligned_erf_summary,
     build_grouped_target_activation_summary,
+    save_aligned_erf_comparison_figure,
+    save_aligned_erf_summary_plots,
     save_grouped_target_activation_plots,
     save_target_erf_arrays,
     save_target_erf_figure,
@@ -254,6 +259,10 @@ def save_config(args, out_dir: Path, n_targets: int, n_erf_targets: int) -> None
         'sum of absolute input-gradient maps for every spatial cell; each '
         'cell score is the sum over channels'
     )
+    config['erf_alignment'] = (
+        'transformed ERFs are inverse-warped with the stimulus affine before '
+        'aligned comparison; non-geometric degradations use identity alignment'
+    )
     with open(out_dir / 'config.json', 'w', encoding='utf-8') as handle:
         json.dump(config, handle, indent=2)
 
@@ -353,6 +362,10 @@ def main(argv: Sequence[str] = None) -> None:
                         image_size=args.input_size,
                     )
                 )
+                example_original_erfs = {}
+                example_transformed_erfs = {}
+                example_aligned_erfs = {}
+                example_layer_shapes = {}
                 for layer_index, layer in enumerate(args.layers):
                     keep_graph = layer_index < len(args.layers) - 1
                     original_erf = full_layer_erf(
@@ -365,8 +378,20 @@ def main(argv: Sequence[str] = None) -> None:
                         transformed_gradient_activations[layer],
                         retain_graph=keep_graph,
                     )
+                    aligned_erf = align_erf_to_original(
+                        transformed_erf,
+                        transformed_spec,
+                    )
                     activation = original_gradient_activations[layer]
                     spatial_cells = int(activation.shape[2] * activation.shape[3])
+                    example_original_erfs[layer] = original_erf
+                    example_transformed_erfs[layer] = transformed_erf
+                    example_aligned_erfs[layer] = aligned_erf
+                    example_layer_shapes[layer] = (
+                        int(activation.shape[1]),
+                        int(activation.shape[2]),
+                        int(activation.shape[3]),
+                    )
                     metadata = _metadata(record, condition_spec, layer)
                     erf_rows.append({
                         **metadata,
@@ -375,7 +400,11 @@ def main(argv: Sequence[str] = None) -> None:
                         'activation_height': int(activation.shape[2]),
                         'activation_width': int(activation.shape[3]),
                         'n_superimposed_cell_maps': spatial_cells,
-                        **erf_distance_metrics(original_erf, transformed_erf),
+                        **aligned_erf_metrics(
+                            original_erf,
+                            transformed_erf,
+                            aligned_erf,
+                        ),
                     })
                     stem = (
                         f'trial_{record.unique_id}_'
@@ -401,8 +430,29 @@ def main(argv: Sequence[str] = None) -> None:
                     save_target_erf_arrays(
                         original_erf,
                         transformed_erf,
+                        aligned_erf,
                         path=condition_dir / f'{stem}.npz',
                     )
+                aligned_dir = (
+                    out_dir / 'erf_aligned_examples' / condition_name
+                    / record.target_category
+                )
+                aligned_stem = (
+                    f'trial_{record.unique_id}_{Path(record.target_path).stem}'
+                )
+                save_aligned_erf_comparison_figure(
+                    original_image,
+                    transformed_image,
+                    example_original_erfs,
+                    example_transformed_erfs,
+                    example_aligned_erfs,
+                    example_layer_shapes,
+                    title=(
+                        f'{condition_name} | {record.target_category} | '
+                        'inverse-aligned ERF comparison'
+                    ),
+                    path=aligned_dir / f'{aligned_stem}.png',
+                )
 
             if record_index % 25 == 0 or record_index == len(records):
                 print(f'  completed {record_index}/{len(records)} targets')
@@ -416,10 +466,19 @@ def main(argv: Sequence[str] = None) -> None:
         grouped_rows,
         out_dir / 'grouped_target_activation_metrics.csv',
     )
+    grouped_erf_rows = build_grouped_aligned_erf_summary(erf_rows)
     write_rows_csv(erf_rows, out_dir / 'target_erf_metrics.csv')
+    write_rows_csv(
+        grouped_erf_rows,
+        out_dir / 'grouped_target_erf_metrics.csv',
+    )
     save_grouped_target_activation_plots(
         grouped_rows,
         out_dir / 'activation_plots',
+    )
+    save_aligned_erf_summary_plots(
+        grouped_erf_rows,
+        out_dir / 'erf_alignment_plots',
     )
     print(f'Target-only feature analysis complete: {out_dir.resolve()}')
 
