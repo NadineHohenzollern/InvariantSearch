@@ -250,12 +250,33 @@ The output contains:
   layer and transformation.
 - `target_erf_metrics.csv`: quantitative ERF overlap, distance, centroid,
   spread, and area summaries for the qualitative examples.
+- `erf_aligned_examples/`: presentation-oriented 3 x 3 figures (one row per
+  layer). The first two columns show the original and transformed ERFs. In the
+  third column, the transformed ERF is inverse-warped into the original object
+  coordinates: green is shared sensitivity, blue is decreased/lost
+  sensitivity, and orange is increased/new sensitivity.
+- `grouped_target_erf_metrics.csv` and `erf_alignment_plots/`: aligned versus
+  unaligned ERF overlap/similarity and the gain produced by geometric
+  alignment. These help separate a spatially moved response from a genuine
+  change in what drives the layer.
 
 For the default 32 x 32 input, the selected activations have shapes 256 x 8 x 8
 at layer 16, 512 x 4 x 4 at layer 23, and 512 x 2 x 2 at layer 30. An ERF is
 computed for every spatial cell in a layer by summing that cell over channels,
 taking the absolute input gradient, and then summing the resulting cell maps.
 Thus the three default layers superimpose 64, 16, and 4 cell maps respectively.
+
+The aligned figures can also be added to a completed target-feature run without
+running VGG again, because they reuse the saved ERF arrays:
+
+```bash
+python codes/visualize_aligned_target_erfs.py \
+  --result-dir /path/to/existing/target_feature_results
+```
+
+This post-processing command writes `aligned_target_erf_metrics.csv`,
+`grouped_aligned_target_erf_metrics.csv`, `erf_aligned_examples/`, and
+`erf_alignment_plots/` inside the existing result directory.
 
 ## Original IVSN publication
 
