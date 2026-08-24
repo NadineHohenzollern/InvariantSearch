@@ -207,9 +207,13 @@ def render_search_display(target_path: Path, distractor_paths: List[Path], targe
     target_rgba = rescale_image(shift_cutout_to_center(load_rgba(target_path)))
     target_transormed = apply_transform_rgba(target_rgba, target_transform, args, apply_smoothing=args.smooth_target)
     canvas = alpha_paste_rgb(canvas, target_transormed, add_jitter_to_position(runtime.POSITIONS[target_position]))
-    
-    # render distractor images
+
+    # select remaining positions for distractors
     remaining_positions = [i for i in range(runtime.N_POSITIONS) if i != target_position]
+    if len(distractor_paths) < len(remaining_positions):
+        remaining_positions = random.sample(remaining_positions, len(distractor_paths))
+
+    # render distractor images
     for dpath, pidx, dspec in zip(distractor_paths, remaining_positions, distractor_transforms):
         distractor_rgba = rescale_image(shift_cutout_to_center(load_rgba(dpath)))
         dist_rgba = apply_transform_rgba(distractor_rgba, dspec, args, apply_smoothing=args.smooth_distractors)

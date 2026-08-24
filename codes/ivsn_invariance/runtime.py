@@ -100,7 +100,7 @@ DEFAULT_GIST_CHECKPOINTS = {
     'conv_gist': MODEL_WEIGHTS_DIR / 'conv_gist_model_epoch_15.pth',
     'conv_gist_mlp': MODEL_WEIGHTS_DIR / 'conv_gist_mlp_model_epoch_10.pth',
     'vgg_gist_imagenet64': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet64_epoch25.pth',
-    'vgg_gist_new': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet_horflip_epochs_40.pth',
+    'vgg_gist_new': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet_randcrop_horflip_epochs_55.pth',
 }
 
 
@@ -195,20 +195,21 @@ def load_font(size=18):
 
 
 def set_runtime_geometry_circle(n_objects: int, radius: int, jitter: float):
-    global POSITIONS
+    global POSITIONS, N_POSITIONS
     _set_runtime_geometry(n_objects, jitter)
     POSITIONS = circle_positions(radius)
 
-def set_runtime_geometry_grid(n_matrix: int, padding: int, jitter: float):
-    global POSITIONS, PADDING
+def set_runtime_geometry_grid(n_matrix: int, n_objects: int, padding: int, jitter: float):
+    global POSITIONS, PADDING, N_POSITIONS
     PADDING = padding
-    _set_runtime_geometry(n_matrix**2, jitter)
+    _set_runtime_geometry(n_objects, jitter)
     POSITIONS = grid_positions(n_matrix)
+    N_POSITIONS = len(POSITIONS)
 
 def _set_runtime_geometry(n_objects: int, jitter: float):
-    global CATEGORIES, N_POSITIONS, MAX_FIXATIONS, JITTER
+    global CATEGORIES, MAX_FIXATIONS, JITTER, N_POSITIONS
     CATEGORIES = get_categories(n_objects)
-    N_POSITIONS = n_objects
     MAX_FIXATIONS = n_objects
+    N_POSITIONS = n_objects
     JITTER = jitter
 

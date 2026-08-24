@@ -117,8 +117,9 @@ def main():
         n_objects = args.n_objects
 
     elif args.arrangement == 'grid':
-        set_runtime_geometry_grid(args.n_matrix, args.padding, args.jitter)
-        n_objects = args.n_matrix * args.n_matrix 
+        assert args.n_objects <= args.n_matrix * args.n_matrix, f"n_objects ({args.n_objects}) must be <= n_matrix^2 ({args.n_matrix ** 2}) for grid arrangement."
+        set_runtime_geometry_grid(args.n_matrix, args.n_objects, args.padding, args.jitter)
+        n_objects = args.n_objects
 
     data_root = Path(args.data_root)
     out_dir = build_dynamic_out_dir(Path(args.out_dir), args)
