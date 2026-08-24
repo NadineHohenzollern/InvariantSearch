@@ -3,6 +3,7 @@
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from typing import Dict, List, Tuple, Optional
 from pathlib import Path
+import math
 import numpy as np
 import matplotlib.pyplot as plt
 from . import runtime
@@ -22,35 +23,55 @@ def normalize_map(arr: np.ndarray) -> np.ndarray:
     return (arr - mn) / (mx - mn)
 
 
-def make_attention_heatmap(attn_np: np.ndarray) -> Image.Image:
+def make_attention_overlay(search_img: Image.Image, attn_np: np.ndarray, alpha: float=0.45) -> Image.Image:
     attn_norm = normalize_map(attn_np)
     cmap = plt.get_cmap('jet')
     rgba = cmap(attn_norm)
+
     rgb = (rgba[:, :, :3] * 255).astype(np.uint8)
-    return Image.fromarray(rgb, mode='RGB')
+    alpha_channel = (attn_norm * 255 * alpha).astype(np.uint8)
+
+    heatmap_rgba = np.dstack([rgb, alpha_channel])
+    heatmap = Image.fromarray(heatmap_rgba, mode='RGBA').resize(search_img.size)
+
+    base = search_img.convert('RGBA')
+    return Image.alpha_composite(base, heatmap)
 
 
-def make_attention_overlay(search_img: Image.Image, attn_np: np.ndarray, alpha: float=0.45) -> Image.Image:
-    heatmap = make_attention_heatmap(attn_np).resize(search_img.size)
-    return Image.blend(search_img.convert('RGB'), heatmap, alpha=alpha)
+def draw_arrow(draw, x1, y1, x2, y2, color, width=3, head_length=25, head_angle=25):
+    draw.line((x1, y1, x2, y2), fill=color, width=width)
+
+    angle = math.atan2(y2 - y1, x2 - x1)
+    angle_rad = math.radians(head_angle)
+
+    left_x = x2 - head_length * math.cos(angle - angle_rad)
+    left_y = y2 - head_length * math.sin(angle - angle_rad)
+    right_x = x2 - head_length * math.cos(angle + angle_rad)
+    right_y = y2 - head_length * math.sin(angle + angle_rad)
+
+    draw.polygon([(x2, y2), (left_x, left_y), (right_x, right_y)], fill=color)
 
 
 def draw_fixation_path(search_img: Image.Image, fixations: List[Tuple[int, int]], target_position: int) -> Image.Image:
     img = search_img.copy().convert('RGB')
     draw = ImageDraw.Draw(img)
-    font = load_font(18)
-    for i, (x, y) in enumerate(runtime.POSITIONS):
-        color = (0, 200, 0) if i == target_position else (255, 255, 255)
-        draw.ellipse((x - 6, y - 6, x + 6, y + 6), outline=color, width=2)
-        draw.text((x + 8, y - 10), f'P{i}', fill=color, font=font)
+    font = load_font(26)
+
+    (x, y) = runtime.POSITIONS[target_position]
+    color = (0, 200, 0)
+    draw.ellipse((x - 10, y - 10, x + 10, y + 10), outline=color, width=5)
+
+    color = (252, 250, 84)
+
     for i in range(len(fixations) - 1):
         x1, y1 = fixations[i]
         x2, y2 = fixations[i + 1]
-        draw.line((x1, y1, x2, y2), fill=(255, 0, 0), width=3)
+        draw_arrow(draw, x1, y1, x2, y2, color=color, width=5)
+
     for step, (x, y) in enumerate(fixations, start=1):
-        r = 9
-        draw.ellipse((x - r, y - r, x + r, y + r), outline=(255, 0, 0), width=3)
-        draw.text((x + 10, y - 10), str(step), fill=(255, 0, 0), font=font)
+        r = 45
+        draw.ellipse((x - r, y - r, x + r, y + r), outline=color, width=5)
+        draw.text((x + 10, y - 10), str(step), fill=color, font=font)
     return img
 
 
@@ -100,7 +121,7 @@ def save_examples(model: BaseAttentionModel, trials: List[Trial], out_dir: Path,
 
         _, fix_centers, found, _ = ivsn_fixation_search(scores, trial.target_position, runtime.MAX_FIXATIONS)
 
-        overlay = make_attention_overlay(search_img, attn_np, alpha=0.45)
+        overlay = make_attention_overlay(search_img, attn_np, alpha=1.0)
         fix_img = draw_fixation_path(search_img, fix_centers, trial.target_position)
 
         stem = f'trial_{idx:03d}'
