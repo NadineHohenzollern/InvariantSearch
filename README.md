@@ -204,6 +204,59 @@ features use a 32 x 32 input and adaptive max pooling by default, matching the
 original VGG IVSN cue path at layer 30; use `--cue-size` only when intentionally
 testing a different cue resolution.
 
+## Isolated-target activation and ERF analysis
+
+`analyze_target_features.py` implements a complementary target-only analysis.
+Unlike `analyze_vgg_features.py`, it does not render a search display. Each
+original and transformed target is rendered on the same gray target canvas,
+resized to 32 x 32, and passed through ImageNet VGG16.
+
+To reuse exactly the 300 targets from an existing feature-analysis run, provide
+its per-trial CSV. Repeated condition/layer rows are deduplicated by `unique_id`:
+
+```bash
+python codes/analyze_target_features.py \
+  --data-root /path/to/dataset \
+  --targets-csv codes/outputs/vgg_feature_rotation_extended/feature_trial_distances.csv \
+  --out-dir codes/outputs/target_activation_rotation \
+  --transform-mode rotation \
+  --rotation-values 0 30 60 90 120 150 180 \
+  --layers 16 23 30 \
+  --input-size 32 \
+  --erf-images-per-class 3 \
+  --device cuda
+```
+
+The same entry point supports `scale`, `shift_x`, `shift_y`, `skew_x`,
+`skew_y`, `noise`, `blur`, and `mixed` transformation modes. If neither
+`--targets-csv` nor `--load-base-manifest` is supplied, a new set of 120
+target-identical and 180 target-different base trials is sampled and saved.
+
+The output contains:
+
+- `target_trials.csv`: the deduplicated target trials used by the run.
+- `target_activation_trial_metrics.csv`: per-target, per-condition and
+  per-layer elementwise activation differences. Mean absolute difference is
+  the primary measure; RMS, relative mean absolute difference and cosine
+  distance are included as complementary measures.
+- `grouped_target_activation_metrics.csv`: all/target-identical/
+  target-different means, across-trial standard deviations and 95% confidence
+  intervals.
+- `activation_plots/`: per-layer transformation plots with standard-deviation
+  error bars.
+- `selected_erf_targets.csv`: deterministic unique targets selected per class.
+- `erf_examples/`: original-image ERF overlay, transformed-image ERF overlay,
+  absolute normalized difference, and compressed raw arrays for every selected
+  layer and transformation.
+- `target_erf_metrics.csv`: quantitative ERF overlap, distance, centroid,
+  spread, and area summaries for the qualitative examples.
+
+For the default 32 x 32 input, the selected activations have shapes 256 x 8 x 8
+at layer 16, 512 x 4 x 4 at layer 23, and 512 x 2 x 2 at layer 30. An ERF is
+computed for every spatial cell in a layer by summing that cell over channels,
+taking the absolute input gradient, and then summing the resulting cell maps.
+Thus the three default layers superimpose 64, 16, and 4 cell maps respectively.
+
 ## Original IVSN publication
 
 The original IVSN model was published in *Nature Communications*:
