@@ -14,6 +14,8 @@ class TransformSpec:
     skew_y_deg: float = 0.0
     noise_std: float = 0.0
     blur_radius: float = 0.0
+    sp_amount: float = 0.0
+    sp_salt_ratio: float = 0.5
 
 
 @dataclass

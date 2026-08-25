@@ -34,6 +34,10 @@ def make_condition_specs(args) -> List[Tuple[str, str, float, TransformSpec]]:
     elif args.transform_mode == 'noise':
         for v in args.noise_values:
             specs.append((f'noise_{v:g}', 'noise_std', float(v), TransformSpec(noise_std=float(v))))
+    elif args.transform_mode == 'sp_noise':
+        for v in args.sp_noise_values:
+            specs.append((f'sp_noise_{v:g}', 'sp_amount', float(v), TransformSpec(
+                sp_amount=float(v), sp_salt_ratio=args.sp_salt_ratio)))
     elif args.transform_mode == 'blur':
         for v in args.blur_values:
             specs.append((f'blur_{v:g}', 'blur_radius', float(v), TransformSpec(blur_radius=float(v))))
@@ -45,6 +49,7 @@ def make_condition_specs(args) -> List[Tuple[str, str, float, TransformSpec]]:
             ('shiftx20', 'mixed', 3.0, TransformSpec(shift_x=20)),
             ('skewx15', 'mixed', 4.0, TransformSpec(skew_x_deg=15)),
             ('noise0.09', 'mixed', 5.0, TransformSpec(noise_std=0.09)),
+            ('sp_noise0.1', 'mixed', 5.0, TransformSpec(sp_amount=0.1, sp_salt_ratio=args.sp_salt_ratio)),
             ('blur2', 'mixed', 6.0, TransformSpec(blur_radius=2.0))
         ])
     else:

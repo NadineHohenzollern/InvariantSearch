@@ -95,6 +95,15 @@ def apply_degradations_rgba(img: Image.Image, spec: TransformSpec) -> Image.Imag
         noise = np.random.normal(0.0, 255.0 * float(spec.noise_std), size=(rgb.shape[0], rgb.shape[1], 1))
         rgb = rgb + noise
     rgb = np.clip(rgb, 0, 255).astype(np.uint8)
+
+    if spec.sp_amount > 0:
+        h, w = rgb.shape[:2]
+        mask = np.random.random((h, w))
+        salt_thresh = spec.sp_amount * spec.sp_salt_ratio
+        pepper_thresh = spec.sp_amount
+        rgb[mask < salt_thresh] = 255
+        rgb[(mask >= salt_thresh) & (mask < pepper_thresh)] = 0
+
     out = np.zeros_like(arr)
     out[:, :, :3] = rgb
     out[:, :, 3] = alpha

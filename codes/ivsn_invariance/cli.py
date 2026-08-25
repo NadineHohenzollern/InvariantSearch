@@ -23,23 +23,17 @@ def parse_args():
     parser.add_argument('--padding', type=int, default=30)
     parser.add_argument('--radius', type=int, default=None)
     parser.add_argument('--jitter', type=float, default=0)
-    parser.add_argument('--transform-mode', type=str, choices=[
-        'original',
-        'rotation',
-        'scale',
-        'shift_x',
-        'shift_y',
-        'skew_x',
-        'skew_y',
-        'noise',
-        'blur',
-        'mixed'], required=True)
+    parser.add_argument('--transform-mode', type=str, required=True,
+                        choices=['original', 'rotation', 'scale', 'shift_x', 'shift_y', 'skew_x', 'skew_y',
+                                 'noise', 'sp_noise', 'blur', 'mixed'])
     parser.add_argument('--rotation-values', type=float, nargs='*',
                         default=[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330])
     parser.add_argument('--scale-values', type=float, nargs='*', default=[0.5, 0.75, 1.0, 1.25, 1.5])
     parser.add_argument('--shift-values', type=float, nargs='*', default=[-30, -15, 0, 15, 30])
     parser.add_argument('--skew-values', type=float, nargs='*', default=[-20, -10, 0, 10, 20])
     parser.add_argument('--noise-values', type=float, nargs='*', default=[0.0, 0.03, 0.06, 0.09, 0.12])
+    parser.add_argument('--sp-noise-values', type=float, nargs='*', default=[0.0, 0.05, 0.1, 0.15, 0.20, 0.3])
+    parser.add_argument('--sp_salt_ratio', type=float, default=0.5)
     parser.add_argument('--blur-values', type=float, nargs='*', default=[0.0, 0.5, 1.0, 2.0, 3.0])
     parser.add_argument('--transform-cue-too', action='store_true')
     parser.add_argument('--couple-cue-to-target', action='store_true', dest='couple_cue_to_target')
@@ -53,22 +47,16 @@ def parse_args():
     parser.add_argument('--smooth-cue', action='store_true')
     parser.add_argument('--smooth-distractors', action='store_true')
     parser.add_argument('--no-dynamic-out-dir', action='store_true')
-    parser.add_argument('--model-kind', type=str, choices=[
-        'vgg',
-        'vgg_gist_pretrained',
-        'conv_gist',
-        'conv_gist_mlp',
-        'vgg_gist_imagenet64',
-        'vonenet',
-        'vgg_gist_new'
-    ], default='vgg')
+    parser.add_argument('--model-kind', type=str, default='vgg',
+                        choices=['vgg', 'vgg_gist_pretrained', 'conv_gist', 'conv_gist_mlp', 'vgg_gist_imagenet64',
+                                 'vonenet', 'vgg_gist_new'])
     parser.add_argument('--gist-image-size', type=int, default=224)
     parser.add_argument('--vgg-gist-checkpoint', type=str, default=None)
     parser.add_argument('--conv-gist-checkpoint', type=str, default=None)
     parser.add_argument('--conv-gist-mlp-checkpoint', type=str, default=None)
     parser.add_argument('--vgg-gist-imagenet64-checkpoint', type=str, default=None)
-    parser.add_argument('--vonenet-backbone', type=str,
-                        choices=['alexnet', 'resnet50'], default='alexnet')
+    parser.add_argument('--vonenet-backbone', type=str, default='alexnet',
+                        choices=['alexnet', 'resnet50'])
     parser.add_argument('--attention-padding', type=int, default=0)
     args = parser.parse_args()
     return args
