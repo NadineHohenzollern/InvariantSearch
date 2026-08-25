@@ -404,7 +404,6 @@ def build_attention_model(args) -> BaseAttentionModel:
             checkpoint = Path(args.vgg_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_pretrained'])
             allowed_prefixes = ('gist.', 'fusion.', 'features.')
 
-
         elif args.model_kind == 'vgg_gist_new':
             feature_extractor = VGGNetGistFeatureExtractor(gist_config)
             checkpoint = Path(args.vgg_gist_checkpoint or DEFAULT_GIST_CHECKPOINTS['vgg_gist_new'])

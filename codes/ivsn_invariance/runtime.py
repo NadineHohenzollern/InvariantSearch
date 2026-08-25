@@ -100,7 +100,7 @@ DEFAULT_GIST_CHECKPOINTS = {
     'conv_gist': MODEL_WEIGHTS_DIR / 'conv_gist_model_epoch_15.pth',
     'conv_gist_mlp': MODEL_WEIGHTS_DIR / 'conv_gist_mlp_model_epoch_10.pth',
     'vgg_gist_imagenet64': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet64_epoch25.pth',
-    'vgg_gist_new': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet_randcrop_horflip_epochs_55.pth',
+    'vgg_gist_new': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet_randcrop_horflip_epochs_70.pth',
 }
 
 
