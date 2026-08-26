@@ -17,6 +17,8 @@ from .target_feature_reporting import (
     build_grouped_aligned_erf_summary,
     save_aligned_erf_comparison_figure,
     save_aligned_erf_summary_plots,
+    save_unit_mass_erf_comparison_figure,
+    save_unit_mass_direct_erf_figure,
 )
 from .trials import make_condition_specs
 
@@ -29,6 +31,18 @@ def parse_args(argv: Sequence[str] = None):
         )
     )
     parser.add_argument('--result-dir', type=str, required=True)
+    parser.add_argument(
+        '--conditions', nargs='*', default=None,
+        help='Optional condition names to render, e.g. rotation_90 scale_0.5.',
+    )
+    parser.add_argument(
+        '--max-examples-per-class', type=int, default=None,
+        help='Optionally limit the selected targets rendered for each class.',
+    )
+    parser.add_argument(
+        '--direct-unit-mass-only', action='store_true',
+        help='Only create the original-vs-transformed unit-mass figures.',
+    )
     return parser.parse_args(argv)
 
 
@@ -61,8 +75,29 @@ def main(argv: Sequence[str] = None) -> None:
     args = SimpleNamespace(**config)
     layers = [int(layer) for layer in args.layers]
     selected_records = _read_csv(result_dir / 'selected_erf_targets.csv')
+    if cli_args.max_examples_per_class is not None:
+        if cli_args.max_examples_per_class < 1:
+            raise ValueError('--max-examples-per-class must be at least 1.')
+        category_counts = {}
+        limited_records = []
+        for record in selected_records:
+            category = str(record['target_category'])
+            count = category_counts.get(category, 0)
+            if count < cli_args.max_examples_per_class:
+                limited_records.append(record)
+                category_counts[category] = count + 1
+        selected_records = limited_records
     shape_lookup = _existing_shape_lookup(result_dir / 'target_erf_metrics.csv')
     condition_specs = make_condition_specs(args)
+    if cli_args.conditions:
+        requested = set(cli_args.conditions)
+        condition_specs = [
+            spec for spec in condition_specs if spec[0] in requested
+        ]
+        found = {spec[0] for spec in condition_specs}
+        missing = sorted(requested - found)
+        if missing:
+            raise ValueError(f'Unknown condition names: {missing}')
     aligned_rows = []
 
     for condition_index, condition_spec in enumerate(condition_specs, start=1):
@@ -130,22 +165,64 @@ def main(argv: Sequence[str] = None) -> None:
                         aligned_erf,
                     ),
                 })
-            output_dir = (
-                result_dir / 'erf_aligned_examples' / condition_name / category
+            if not cli_args.direct_unit_mass_only:
+                output_dir = (
+                    result_dir / 'erf_aligned_examples'
+                    / condition_name / category
+                )
+                save_aligned_erf_comparison_figure(
+                    original_image,
+                    transformed_image,
+                    original_erfs,
+                    transformed_erfs,
+                    aligned_erfs,
+                    layer_shapes,
+                    title=(
+                        f'{condition_name} | {category} | '
+                        'inverse-aligned ERF comparison'
+                    ),
+                    path=(
+                        output_dir
+                        / f'trial_{unique_id}_{target_path.stem}.png'
+                    ),
+                )
+                unit_mass_dir = (
+                    result_dir / 'erf_unit_mass_examples' / condition_name
+                    / category
+                )
+                save_unit_mass_erf_comparison_figure(
+                    original_image,
+                    transformed_image,
+                    original_erfs,
+                    transformed_erfs,
+                    aligned_erfs,
+                    layer_shapes,
+                    title=f'{condition_name} | {category}',
+                    path=(
+                        unit_mass_dir
+                        / f'trial_{unique_id}_{target_path.stem}.png'
+                    ),
+                )
+            direct_unit_mass_dir = (
+                result_dir / 'erf_unit_mass_direct_examples'
+                / condition_name / category
             )
-            save_aligned_erf_comparison_figure(
+            save_unit_mass_direct_erf_figure(
                 original_image,
                 transformed_image,
                 original_erfs,
                 transformed_erfs,
-                aligned_erfs,
                 layer_shapes,
-                title=(
-                    f'{condition_name} | {category} | '
-                    'inverse-aligned ERF comparison'
+                title=f'{condition_name} | {category}',
+                path=(
+                    direct_unit_mass_dir
+                    / f'trial_{unique_id}_{target_path.stem}.png'
                 ),
-                path=output_dir / f'trial_{unique_id}_{target_path.stem}.png',
             )
+
+    if cli_args.direct_unit_mass_only:
+        print(f'Direct unit-mass ERF figures written to: {result_dir.resolve()}')
+        return
 
     grouped_rows = build_grouped_aligned_erf_summary(aligned_rows)
     write_rows_csv(

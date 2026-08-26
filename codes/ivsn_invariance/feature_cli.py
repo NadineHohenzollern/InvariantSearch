@@ -31,6 +31,7 @@ from .feature_reporting import (
     save_cell_distance_matrix,
     save_erf_arrays,
     save_erf_figure,
+    save_unit_mass_search_erf_figure,
     save_feature_performance_scatter_plots,
     save_grouped_cue_target_plots,
     save_grouped_feature_plots,
@@ -406,6 +407,22 @@ def analyze_trial(
                     f'VGG layer {layer} | {region.window_size}x{region.window_size}'
                 ),
                 path=condition_dir / f'{stem}.png',
+            )
+            unit_mass_dir = (
+                erf_root.parent / 'erf_unit_mass_examples'
+                / trial.condition_name
+            )
+            save_unit_mass_search_erf_figure(
+                original_image,
+                transformed_image,
+                original_erf,
+                transformed_erf,
+                title=(
+                    f'{trial.condition_name} | {trial.trial_type} | '
+                    f'VGG layer {layer} | '
+                    f'{region.window_size}x{region.window_size}'
+                ),
+                path=unit_mass_dir / f'{stem}.png',
             )
             save_erf_arrays(
                 original_erf,
