@@ -25,6 +25,12 @@ ACTIVATION_METRICS = (
     'cosine_distance',
 )
 
+POOLED_BLOCK_METRICS = (
+    'mean_absolute_difference',
+    'relative_mean_absolute_difference',
+    'cosine_distance',
+)
+
 ALIGNED_ERF_METRICS = (
     'erf_cosine_distance',
     'aligned_erf_cosine_distance',
@@ -136,6 +142,118 @@ def save_grouped_target_activation_plots(
             plt.close(fig)
 
 
+def build_grouped_pooled_block_summary(
+        rows: Sequence[dict],
+    ) -> List[dict]:
+    """Aggregate spatially pooled block differences by trial group."""
+    if not rows:
+        return []
+    frame = pd.DataFrame(rows)
+    keys = [
+        'condition_name', 'condition_group', 'condition_value',
+        'block', 'layer', 'channels', 'activation_height', 'activation_width',
+    ]
+    grouped_rows = []
+    for key_values, condition_frame in frame.groupby(keys, sort=False):
+        row = dict(zip(keys, key_values))
+        for group_name, _ in GROUPS:
+            if group_name == 'all':
+                subset = condition_frame
+            else:
+                trial_type = group_name[len('target_'):]
+                subset = condition_frame[
+                    condition_frame['trial_type'] == trial_type
+                ]
+            row[f'n_{group_name}'] = int(len(subset))
+            for metric in POOLED_BLOCK_METRICS:
+                values = subset[metric].to_numpy(dtype=np.float64)
+                if len(values):
+                    row[f'{metric}_{group_name}'] = float(values.mean())
+                    row[f'std_{metric}_{group_name}'] = float(
+                        values.std(ddof=1) if len(values) > 1 else 0.0
+                    )
+                    row[f'ci95_{metric}_{group_name}'] = (
+                        confidence_interval_95(values)
+                    )
+                else:
+                    row[f'{metric}_{group_name}'] = float('nan')
+                    row[f'std_{metric}_{group_name}'] = float('nan')
+                    row[f'ci95_{metric}_{group_name}'] = float('nan')
+        grouped_rows.append(row)
+    return sorted(
+        grouped_rows,
+        key=lambda row: (
+            str(row['condition_group']),
+            float(row['condition_value']),
+            int(row['block']),
+        ),
+    )
+
+
+def save_pooled_block_activation_plots(
+        grouped_rows: Sequence[dict],
+        plot_dir: Path,
+    ) -> None:
+    """Plot one connected layer profile per transformation condition."""
+    if not grouped_rows:
+        return
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    frame = pd.DataFrame(grouped_rows)
+    metric_labels = {
+        'mean_absolute_difference': (
+            'Mean absolute difference across pooled channels'
+        ),
+        'relative_mean_absolute_difference': (
+            'Relative mean absolute difference'
+        ),
+        'cosine_distance': 'Cosine distance between pooled channel vectors',
+    }
+    styles = {
+        'all': ('o', '#1f77b4'),
+        'target_identical': ('s', '#2ca02c'),
+        'target_different': ('^', '#d62728'),
+    }
+    for condition_name in frame['condition_name'].drop_duplicates():
+        condition_frame = frame[
+            frame['condition_name'] == condition_name
+        ].sort_values('block')
+        x = np.arange(len(condition_frame))
+        tick_labels = [
+            f"Block {int(row.block)}\nLayer {int(row.layer)}"
+            for row in condition_frame.itertuples()
+        ]
+        for metric, label in metric_labels.items():
+            fig, axis = plt.subplots(figsize=(8.2, 5.0))
+            for group_name, group_label in GROUPS:
+                marker, color = styles[group_name]
+                axis.errorbar(
+                    x,
+                    condition_frame[f'{metric}_{group_name}'],
+                    yerr=condition_frame[f'std_{metric}_{group_name}'],
+                    marker=marker,
+                    linestyle=':',
+                    linewidth=1.8,
+                    markersize=6,
+                    capsize=4,
+                    color=color,
+                    label=group_label,
+                )
+            axis.set_xticks(x, tick_labels)
+            axis.set_xlabel('VGG16 max-pool output')
+            axis.set_ylabel(label)
+            axis.set_title(str(condition_name).replace('_', ' '))
+            axis.spines['top'].set_visible(False)
+            axis.spines['right'].set_visible(False)
+            axis.grid(axis='y', alpha=0.22)
+            axis.legend()
+            fig.tight_layout()
+            fig.savefig(
+                plot_dir / f'{condition_name}_{metric}.png',
+                dpi=300,
+            )
+            plt.close(fig)
+
+
 def align_erf_to_original(
         transformed_erf: np.ndarray,
         transform_spec: TransformSpec,
@@ -197,6 +315,38 @@ def _unit_mass(values: np.ndarray) -> np.ndarray:
     if total <= np.finfo(np.float32).eps:
         return np.zeros_like(values)
     return values / total
+
+
+def unit_mass_map(values: np.ndarray) -> np.ndarray:
+    """Return a non-negative spatial map whose pixel values sum to one."""
+    return _unit_mass(values)
+
+
+def _signed_unit_mass_change_overlay(
+        original_image: Image.Image,
+        original_erf: np.ndarray,
+        comparison_erf: np.ndarray,
+    ) -> np.ndarray:
+    """Show decreases in blue and increases in orange after mass normalization."""
+    difference = _unit_mass(comparison_erf) - _unit_mass(original_erf)
+    magnitude = np.abs(difference)
+    maximum = float(magnitude.max()) if magnitude.size else 0.0
+    size = (original_erf.shape[1], original_erf.shape[0])
+    background = np.asarray(
+        original_image.convert('L').convert('RGB').resize(size, Image.BILINEAR),
+        dtype=np.float32,
+    ) / 255.0
+    if maximum <= np.finfo(np.float32).eps:
+        return background
+    decreased = np.asarray([0.10, 0.45, 1.00], dtype=np.float32)
+    increased = np.asarray([1.00, 0.40, 0.05], dtype=np.float32)
+    color = np.where(
+        (difference >= 0)[..., None],
+        increased,
+        decreased,
+    )
+    alpha = np.clip(magnitude / maximum, 0.0, 1.0) * 0.90
+    return background * (1.0 - alpha[..., None]) + color * alpha[..., None]
 
 
 def sensitivity_change_overlay(
@@ -329,6 +479,189 @@ def save_aligned_erf_comparison_figure(
     )
     fig.suptitle(title, fontsize=15)
     fig.tight_layout(rect=(0.0, 0.045, 1.0, 0.965))
+    fig.savefig(path, dpi=250, bbox_inches='tight')
+    plt.close(fig)
+
+
+def save_unit_mass_erf_comparison_figure(
+        original_image: Image.Image,
+        transformed_image: Image.Image,
+        original_erfs: dict,
+        transformed_erfs: dict,
+        aligned_erfs: dict,
+        layer_shapes: dict,
+        title: str,
+        path: Path,
+    ) -> None:
+    """Save ERFs normalized to unit mass, with a shared scale per layer."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    layers = sorted(original_erfs)
+    fig, axes = plt.subplots(
+        len(layers),
+        4,
+        figsize=(16.0, 3.45 * len(layers)),
+        squeeze=False,
+    )
+    for row, layer in enumerate(layers):
+        original_erf = original_erfs[layer]
+        transformed_erf = transformed_erfs[layer]
+        aligned_erf = aligned_erfs[layer]
+        original_mass = _unit_mass(original_erf)
+        transformed_mass = _unit_mass(transformed_erf)
+        aligned_mass = _unit_mass(aligned_erf)
+        shared_peak = max(
+            float(original_mass.max()),
+            float(transformed_mass.max()),
+            float(aligned_mass.max()),
+            np.finfo(np.float32).eps,
+        )
+        size = (original_erf.shape[1], original_erf.shape[0])
+        original_rgb = np.asarray(
+            original_image.resize(size, Image.BILINEAR), dtype=np.float32
+        ) / 255.0
+        transformed_rgb = np.asarray(
+            transformed_image.resize(size, Image.BILINEAR), dtype=np.float32
+        ) / 255.0
+
+        axes[row, 0].imshow(original_rgb)
+        axes[row, 0].imshow(
+            original_mass, cmap='magma', alpha=0.60, vmin=0, vmax=shared_peak
+        )
+        axes[row, 1].imshow(transformed_rgb)
+        axes[row, 1].imshow(
+            transformed_mass, cmap='magma', alpha=0.60,
+            vmin=0, vmax=shared_peak,
+        )
+        axes[row, 2].imshow(original_rgb)
+        axes[row, 2].imshow(
+            aligned_mass, cmap='magma', alpha=0.60,
+            vmin=0, vmax=shared_peak,
+        )
+        axes[row, 3].imshow(_signed_unit_mass_change_overlay(
+            original_image,
+            original_erf,
+            aligned_erf,
+        ))
+
+        channels, height, width = layer_shapes[layer]
+        axes[row, 0].set_ylabel(
+            f'Layer {layer}\n{channels}x{height}x{width}', fontsize=12
+        )
+        axes[row, 0].text(
+            0.02, 0.98, f'raw sum = {float(original_erf.sum()):.2e}',
+            transform=axes[row, 0].transAxes, va='top', color='white',
+            fontsize=8, bbox={'facecolor': 'black', 'alpha': 0.55, 'pad': 2},
+        )
+        axes[row, 1].text(
+            0.02, 0.98, f'raw sum = {float(transformed_erf.sum()):.2e}',
+            transform=axes[row, 1].transAxes, va='top', color='white',
+            fontsize=8, bbox={'facecolor': 'black', 'alpha': 0.55, 'pad': 2},
+        )
+        aligned_metrics = erf_distance_metrics(original_erf, aligned_erf)
+        axes[row, 3].text(
+            0.02, 0.98,
+            f"TV distance = {aligned_metrics['erf_total_variation_distance']:.2f}",
+            transform=axes[row, 3].transAxes, va='top', color='white',
+            fontsize=8, bbox={'facecolor': 'black', 'alpha': 0.55, 'pad': 2},
+        )
+        for axis in axes[row]:
+            axis.set_xticks([])
+            axis.set_yticks([])
+
+    axes[0, 0].set_title('Original: unit-mass ERF')
+    axes[0, 1].set_title('Transformed: unit-mass ERF')
+    axes[0, 2].set_title('Inverse-aligned: unit-mass ERF')
+    axes[0, 3].set_title('Aligned change')
+    fig.legend(
+        handles=[
+            Patch(color=(0.10, 0.45, 1.00), label='Decreased mass'),
+            Patch(color=(1.00, 0.40, 0.05), label='Increased mass'),
+        ],
+        loc='lower center', ncol=2, frameon=False,
+    )
+    fig.suptitle(f'{title}\nEach ERF sums to 1', fontsize=15)
+    fig.tight_layout(rect=(0.0, 0.05, 1.0, 0.95))
+    fig.savefig(path, dpi=250, bbox_inches='tight')
+    plt.close(fig)
+
+
+def save_unit_mass_direct_erf_figure(
+        original_image: Image.Image,
+        transformed_image: Image.Image,
+        original_erfs: dict,
+        transformed_erfs: dict,
+        layer_shapes: dict,
+        title: str,
+        path: Path,
+    ) -> None:
+    """Reproduce the original ERF comparison using unit-mass maps."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    layers = sorted(original_erfs)
+    fig, axes = plt.subplots(
+        len(layers),
+        3,
+        figsize=(12.5, 3.55 * len(layers)),
+        squeeze=False,
+    )
+    for row, layer in enumerate(layers):
+        original_erf = original_erfs[layer]
+        transformed_erf = transformed_erfs[layer]
+        original_mass = _unit_mass(original_erf)
+        transformed_mass = _unit_mass(transformed_erf)
+        absolute_difference = np.abs(original_mass - transformed_mass)
+        shared_peak = max(
+            float(original_mass.max()),
+            float(transformed_mass.max()),
+            np.finfo(np.float32).eps,
+        )
+        difference_peak = max(
+            float(absolute_difference.max()),
+            np.finfo(np.float32).eps,
+        )
+        size = (original_erf.shape[1], original_erf.shape[0])
+        original_rgb = np.asarray(
+            original_image.resize(size, Image.BILINEAR), dtype=np.float32
+        ) / 255.0
+        transformed_rgb = np.asarray(
+            transformed_image.resize(size, Image.BILINEAR), dtype=np.float32
+        ) / 255.0
+
+        axes[row, 0].imshow(original_rgb)
+        axes[row, 0].imshow(
+            original_mass, cmap='magma', alpha=0.60,
+            vmin=0, vmax=shared_peak,
+        )
+        axes[row, 1].imshow(transformed_rgb)
+        axes[row, 1].imshow(
+            transformed_mass, cmap='magma', alpha=0.60,
+            vmin=0, vmax=shared_peak,
+        )
+        axes[row, 2].imshow(
+            absolute_difference,
+            cmap='viridis',
+            vmin=0,
+            vmax=difference_peak,
+        )
+        channels, height, width = layer_shapes[layer]
+        axes[row, 0].set_ylabel(
+            f'Layer {layer}\n{channels}x{height}x{width}', fontsize=12
+        )
+        direct_metrics = erf_distance_metrics(original_erf, transformed_erf)
+        axes[row, 2].text(
+            0.02, 0.98,
+            f"TV distance = {direct_metrics['erf_total_variation_distance']:.2f}",
+            transform=axes[row, 2].transAxes, va='top', color='white',
+            fontsize=9, bbox={'facecolor': 'black', 'alpha': 0.55, 'pad': 3},
+        )
+        for axis in axes[row]:
+            axis.set_xticks([])
+            axis.set_yticks([])
+
+    axes[0, 0].set_title('Original image + unit-mass ERF')
+    axes[0, 1].set_title('Transformed image + unit-mass ERF')
+    axes[0, 2].set_title('Absolute unit-mass difference')
+    fig.suptitle(f'{title}\nDirect comparison; each ERF sums to 1', fontsize=15)
+    fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.95))
     fig.savefig(path, dpi=250, bbox_inches='tight')
     plt.close(fig)
 
@@ -469,6 +802,9 @@ def save_target_erf_arrays(
         original_erf_normalized=normalized_map(original_erf),
         transformed_erf_normalized=normalized_map(transformed_erf),
         aligned_transformed_erf_normalized=normalized_map(aligned_erf),
+        original_erf_unit_mass=_unit_mass(original_erf),
+        transformed_erf_unit_mass=_unit_mass(transformed_erf),
+        aligned_transformed_erf_unit_mass=_unit_mass(aligned_erf),
         absolute_normalized_difference=np.abs(
             normalized_map(original_erf) - normalized_map(transformed_erf)
         ),

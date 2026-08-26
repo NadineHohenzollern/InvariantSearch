@@ -19,18 +19,23 @@ from .feature_reporting import write_rows_csv
 from .target_feature_analysis import (
     activation_difference_metrics,
     full_layer_erf,
+    pooled_activation_difference_metrics,
 )
 from .target_feature_imaging import render_paired_targets
 from .target_feature_reporting import (
     align_erf_to_original,
     aligned_erf_metrics,
     build_grouped_aligned_erf_summary,
+    build_grouped_pooled_block_summary,
     build_grouped_target_activation_summary,
     save_aligned_erf_comparison_figure,
     save_aligned_erf_summary_plots,
     save_grouped_target_activation_plots,
+    save_pooled_block_activation_plots,
     save_target_erf_arrays,
     save_target_erf_figure,
+    save_unit_mass_erf_comparison_figure,
+    save_unit_mass_direct_erf_figure,
 )
 from .trials import make_condition_specs, sample_base_trials
 
@@ -123,6 +128,16 @@ def parse_args(argv: Sequence[str] = None):
         help='torchvision VGG feature-module cut points to record.',
     )
     parser.add_argument(
+        '--pooled-block-layers',
+        type=int,
+        nargs='+',
+        default=[5, 10, 17, 24, 31],
+        help=(
+            'VGG cut points for spatially averaged block vectors. Defaults '
+            'to the five max-pool outputs requested for the block analysis.'
+        ),
+    )
+    parser.add_argument(
         '--erf-images-per-class',
         type=int,
         default=3,
@@ -136,13 +151,17 @@ def parse_args(argv: Sequence[str] = None):
             args.targets_csv or args.load_base_manifest
         ):
         parser.error('At least one trial is required.')
-    if args.input_size < 32 and max(args.layers) >= 30:
-        parser.error('--input-size must be at least 32 when using VGG layer 30.')
+    requested_layers = args.layers + args.pooled_block_layers
+    if args.input_size < 32 and max(requested_layers) >= 30:
+        parser.error('--input-size must be at least 32 when using deep VGG layers.')
     if any(layer < 1 or layer > 31 for layer in args.layers):
         parser.error('--layers must be between 1 and 31.')
+    if any(layer < 1 or layer > 31 for layer in args.pooled_block_layers):
+        parser.error('--pooled-block-layers must be between 1 and 31.')
     if args.erf_images_per_class < 0:
         parser.error('--erf-images-per-class must be non-negative.')
     args.layers = sorted(set(args.layers))
+    args.pooled_block_layers = list(dict.fromkeys(args.pooled_block_layers))
     return args
 
 
@@ -255,6 +274,10 @@ def save_config(args, out_dir: Path, n_targets: int, n_erf_targets: int) -> None
         'elementwise absolute difference between full original/transformed '
         'layer activation tensors'
     )
+    config['pooled_block_activation_comparison'] = (
+        'spatial mean over HxW at each max-pool output, followed by the '
+        'absolute difference between corresponding channels and their mean'
+    )
     config['erf_definition'] = (
         'sum of absolute input-gradient maps for every spatial cell; each '
         'cell score is the sum over channels'
@@ -303,9 +326,11 @@ def main(argv: Sequence[str] = None) -> None:
         f'Loading VGG16 feature probe on {args.device}; '
         f'{len(records)} target trials, {len(selected_erf_records)} ERF targets...'
     )
-    probe = VGG16FeatureProbe(args.layers, device=args.device)
+    probe_layers = sorted(set(args.layers).union(args.pooled_block_layers))
+    probe = VGG16FeatureProbe(probe_layers, device=args.device)
     condition_specs = make_condition_specs(args)
     activation_rows = []
+    pooled_block_rows = []
     erf_rows = []
 
     for condition_index, condition_spec in enumerate(condition_specs, start=1):
@@ -344,6 +369,22 @@ def main(argv: Sequence[str] = None) -> None:
                     'activation_height': int(original_activation.shape[2]),
                     'activation_width': int(original_activation.shape[3]),
                     **activation_difference_metrics(
+                        original_activation,
+                        transformed_activation,
+                    ),
+                })
+
+            for block, layer in enumerate(args.pooled_block_layers, start=1):
+                original_activation = original_activations[layer]
+                transformed_activation = transformed_activations[layer]
+                pooled_block_rows.append({
+                    **_metadata(record, condition_spec, layer),
+                    'block': block,
+                    'input_size': args.input_size,
+                    'channels': int(original_activation.shape[1]),
+                    'activation_height': int(original_activation.shape[2]),
+                    'activation_width': int(original_activation.shape[3]),
+                    **pooled_activation_difference_metrics(
                         original_activation,
                         transformed_activation,
                     ),
@@ -453,11 +494,41 @@ def main(argv: Sequence[str] = None) -> None:
                     ),
                     path=aligned_dir / f'{aligned_stem}.png',
                 )
+                unit_mass_dir = (
+                    out_dir / 'erf_unit_mass_examples' / condition_name
+                    / record.target_category
+                )
+                save_unit_mass_erf_comparison_figure(
+                    original_image,
+                    transformed_image,
+                    example_original_erfs,
+                    example_transformed_erfs,
+                    example_aligned_erfs,
+                    example_layer_shapes,
+                    title=f'{condition_name} | {record.target_category}',
+                    path=unit_mass_dir / f'{aligned_stem}.png',
+                )
+                direct_unit_mass_dir = (
+                    out_dir / 'erf_unit_mass_direct_examples' / condition_name
+                    / record.target_category
+                )
+                save_unit_mass_direct_erf_figure(
+                    original_image,
+                    transformed_image,
+                    example_original_erfs,
+                    example_transformed_erfs,
+                    example_layer_shapes,
+                    title=f'{condition_name} | {record.target_category}',
+                    path=direct_unit_mass_dir / f'{aligned_stem}.png',
+                )
 
             if record_index % 25 == 0 or record_index == len(records):
                 print(f'  completed {record_index}/{len(records)} targets')
 
     grouped_rows = build_grouped_target_activation_summary(activation_rows)
+    grouped_pooled_block_rows = build_grouped_pooled_block_summary(
+        pooled_block_rows
+    )
     write_rows_csv(
         activation_rows,
         out_dir / 'target_activation_trial_metrics.csv',
@@ -465,6 +536,14 @@ def main(argv: Sequence[str] = None) -> None:
     write_rows_csv(
         grouped_rows,
         out_dir / 'grouped_target_activation_metrics.csv',
+    )
+    write_rows_csv(
+        pooled_block_rows,
+        out_dir / 'pooled_block_activation_trial_metrics.csv',
+    )
+    write_rows_csv(
+        grouped_pooled_block_rows,
+        out_dir / 'grouped_pooled_block_activation_metrics.csv',
     )
     grouped_erf_rows = build_grouped_aligned_erf_summary(erf_rows)
     write_rows_csv(erf_rows, out_dir / 'target_erf_metrics.csv')
@@ -475,6 +554,10 @@ def main(argv: Sequence[str] = None) -> None:
     save_grouped_target_activation_plots(
         grouped_rows,
         out_dir / 'activation_plots',
+    )
+    save_pooled_block_activation_plots(
+        grouped_pooled_block_rows,
+        out_dir / 'pooled_block_activation_plots',
     )
     save_aligned_erf_summary_plots(
         grouped_erf_rows,

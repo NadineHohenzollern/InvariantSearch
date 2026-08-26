@@ -9,12 +9,15 @@ from codes.ivsn_invariance.domain import TransformSpec
 from codes.ivsn_invariance.target_feature_analysis import (
     activation_difference_metrics,
     full_layer_erf,
+    pooled_activation_difference_metrics,
 )
 from codes.ivsn_invariance.target_feature_cli import TargetRecord, select_erf_records
 from codes.ivsn_invariance.target_feature_reporting import (
     align_erf_to_original,
     aligned_erf_metrics,
     build_grouped_target_activation_summary,
+    build_grouped_pooled_block_summary,
+    unit_mass_map,
 )
 
 
@@ -36,6 +39,21 @@ class TargetFeatureAnalysisTests(unittest.TestCase):
         activation = 3.0 * input_tensor
         erf = full_layer_erf(input_tensor, activation)
         np.testing.assert_allclose(erf, np.full((2, 2), 3.0))
+
+    def test_pooled_activation_difference_compares_channel_vectors(self):
+        original = torch.stack((
+            torch.full((2, 2), 1.0),
+            torch.full((2, 2), 3.0),
+        )).unsqueeze(0)
+        transformed = torch.stack((
+            torch.full((2, 2), 2.0),
+            torch.full((2, 2), 5.0),
+        )).unsqueeze(0)
+        metrics = pooled_activation_difference_metrics(original, transformed)
+        self.assertEqual(metrics['n_channels'], 2)
+        self.assertAlmostEqual(metrics['mean_absolute_difference'], 1.5)
+        self.assertAlmostEqual(metrics['std_absolute_difference'], 0.5)
+        self.assertAlmostEqual(metrics['relative_mean_absolute_difference'], 0.75)
 
     def test_erf_selection_uses_unique_paths_per_category(self):
         records = [
@@ -75,11 +93,40 @@ class TargetFeatureAnalysisTests(unittest.TestCase):
             np.sqrt(2.0),
         )
 
+    def test_grouped_pooled_summary_splits_trial_types(self):
+        base = {
+            'condition_name': 'rotation_30',
+            'condition_group': 'rotation_deg',
+            'condition_value': 30.0,
+            'block': 1,
+            'layer': 5,
+            'channels': 64,
+            'activation_height': 16,
+            'activation_width': 16,
+            'relative_mean_absolute_difference': 0.5,
+            'cosine_distance': 0.1,
+        }
+        rows = [
+            {**base, 'trial_type': 'identical', 'mean_absolute_difference': 1.0},
+            {**base, 'trial_type': 'different', 'mean_absolute_difference': 3.0},
+        ]
+        summary = build_grouped_pooled_block_summary(rows)[0]
+        self.assertEqual(summary['n_all'], 2)
+        self.assertEqual(summary['n_target_identical'], 1)
+        self.assertEqual(summary['n_target_different'], 1)
+        self.assertAlmostEqual(summary['mean_absolute_difference_all'], 2.0)
+
     def test_identity_erf_alignment_preserves_map(self):
         values = np.zeros((32, 32), dtype=np.float32)
         values[8:14, 18:24] = 1.0
         aligned = align_erf_to_original(values, TransformSpec())
         np.testing.assert_allclose(aligned, values, atol=0.06)
+
+    def test_unit_mass_map_sums_to_one_without_changing_ratios(self):
+        values = np.asarray([[0.0, 2.0], [4.0, 6.0]], dtype=np.float32)
+        normalized = unit_mass_map(values)
+        self.assertAlmostEqual(float(normalized.sum()), 1.0)
+        self.assertAlmostEqual(float(normalized[1, 1] / normalized[0, 1]), 3.0)
 
     def test_inverse_rotation_alignment_recovers_spatial_pattern(self):
         original = np.zeros((32, 32), dtype=np.float32)

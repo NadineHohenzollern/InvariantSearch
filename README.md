@@ -189,6 +189,10 @@ The output contains:
 - `distance_matrix_examples/`: explicit 1 x 1, 3 x 3, and 5 x 5 cell-distance
   heatmaps for the selected examples.
 - `erf_examples/`: paired ERF figures and compressed raw saliency arrays.
+- `erf_unit_mass_examples/`: the same full-search-image ERF figures with each
+  complete 224 x 224 ERF divided by its spatial sum. The original and
+  transformed maps use a shared color scale, and the direct absolute
+  difference reports total-variation distance.
 - `erf_example_metrics.csv`: scale-independent ERF distances plus mass overlap,
   centroid displacement, spread, and 90%-mass area for visualized examples.
 
@@ -244,6 +248,19 @@ The output contains:
   intervals.
 - `activation_plots/`: per-layer transformation plots with standard-deviation
   error bars.
+- `pooled_block_activation_trial_metrics.csv`: Atif's block-wise analysis.
+  Activations at max-pool layers 5, 10, 17, 24, and 31 are spatially averaged
+  from `C x H x W` to one `C`-dimensional vector. Each row reports the mean
+  absolute difference across corresponding original/transformed channels.
+- `grouped_pooled_block_activation_metrics.csv`: means, across-trial standard
+  deviations, and 95% confidence intervals for all, target-identical, and
+  target-different trials at each of the five blocks. Relative MAD and cosine
+  distance are included because raw activation scale can differ by block.
+- `pooled_block_activation_plots/`: one connected, dotted-line layer profile
+  per transformation condition and metric. Points are trial means and error
+  bars are standard deviations; the three lines are all, target-identical,
+  and target-different trials. The `mean_absolute_difference` figures are the
+  primary plots requested by Atif.
 - `selected_erf_targets.csv`: deterministic unique targets selected per class.
 - `erf_examples/`: original-image ERF overlay, transformed-image ERF overlay,
   absolute normalized difference, and compressed raw arrays for every selected
@@ -259,6 +276,15 @@ The output contains:
   unaligned ERF overlap/similarity and the gain produced by geometric
   alignment. These help separate a spatially moved response from a genuine
   change in what drives the layer.
+- `erf_unit_mass_examples/`: direct presentation comparison after normalizing
+  every complete ERF to unit mass (`ERF / sum(ERF)`). Original, transformed,
+  inverse-aligned, and signed aligned-change maps are shown per layer using a
+  shared color scale. This removes differences in total gradient magnitude and
+  highlights changes in the spatial distribution.
+- `erf_unit_mass_direct_examples/`: unit-mass version of Atif's original ERF
+  visualization, without geometric alignment. Its columns are original ERF,
+  transformed ERF, and their absolute spatial difference; its rows are the
+  selected VGG layers.
 
 For the default 32 x 32 input, the selected activations have shapes 256 x 8 x 8
 at layer 16, 512 x 4 x 4 at layer 23, and 512 x 2 x 2 at layer 30. An ERF is
@@ -274,8 +300,19 @@ python codes/visualize_aligned_target_erfs.py \
   --result-dir /path/to/existing/target_feature_results
 ```
 
+For a small set of direct, non-aligned unit-mass examples for a presentation:
+
+```bash
+python codes/visualize_aligned_target_erfs.py \
+  --result-dir /path/to/existing/target_feature_results \
+  --conditions rotation_90 \
+  --max-examples-per-class 1 \
+  --direct-unit-mass-only
+```
+
 This post-processing command writes `aligned_target_erf_metrics.csv`,
-`grouped_aligned_target_erf_metrics.csv`, `erf_aligned_examples/`, and
+`grouped_aligned_target_erf_metrics.csv`, `erf_aligned_examples/`,
+`erf_unit_mass_examples/`, `erf_unit_mass_direct_examples/`, and
 `erf_alignment_plots/` inside the existing result directory.
 
 ## Original IVSN publication

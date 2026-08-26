@@ -594,3 +594,12 @@ def normalized_map(values: np.ndarray) -> np.ndarray:
     if maximum <= 0:
         return np.zeros_like(values)
     return values / maximum
+
+
+def unit_mass_map(values: np.ndarray) -> np.ndarray:
+    """Normalize a non-negative ERF so all spatial values sum to one."""
+    values = np.clip(np.asarray(values, dtype=np.float32), 0.0, None)
+    total = float(values.sum())
+    if total <= np.finfo(np.float32).eps:
+        return np.zeros_like(values)
+    return values / total

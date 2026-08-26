@@ -58,6 +58,66 @@ def activation_difference_metrics(
     }
 
 
+def pooled_activation_difference_metrics(
+        original: torch.Tensor,
+        transformed: torch.Tensor,
+    ) -> Dict[str, float]:
+    """Compare channel vectors after spatial average pooling.
+
+    Each [1, C, H, W] activation tensor is averaged over H and W, yielding
+    one C-dimensional vector. The primary metric is then the mean absolute
+    difference across corresponding channels.
+    """
+    if original.shape != transformed.shape:
+        raise ValueError(
+            f'Activation shapes differ: {tuple(original.shape)} vs '
+            f'{tuple(transformed.shape)}.'
+        )
+    if original.ndim != 4 or original.shape[0] != 1:
+        raise ValueError(
+            'Expected activation shape [1, channels, height, width], got '
+            f'{tuple(original.shape)}.'
+        )
+
+    original_vector = original.detach().float().mean(dim=(-2, -1))[0]
+    transformed_vector = transformed.detach().float().mean(dim=(-2, -1))[0]
+    difference = original_vector - transformed_vector
+    absolute_difference = difference.abs()
+    eps = torch.finfo(original_vector.dtype).eps
+
+    original_norm = torch.linalg.vector_norm(original_vector)
+    transformed_norm = torch.linalg.vector_norm(transformed_vector)
+    if original_norm <= eps and transformed_norm <= eps:
+        cosine_distance = original_vector.new_tensor(0.0)
+    elif original_norm <= eps or transformed_norm <= eps:
+        cosine_distance = original_vector.new_tensor(1.0)
+    else:
+        cosine_distance = 1.0 - F.cosine_similarity(
+            original_vector.unsqueeze(0),
+            transformed_vector.unsqueeze(0),
+            dim=1,
+        )[0]
+
+    mean_absolute_difference = absolute_difference.mean()
+    reference_scale = original_vector.abs().mean()
+    return {
+        'n_channels': int(original_vector.numel()),
+        'original_mean_pooled_activation': float(original_vector.mean().cpu()),
+        'transformed_mean_pooled_activation': float(
+            transformed_vector.mean().cpu()
+        ),
+        'mean_absolute_difference': float(mean_absolute_difference.cpu()),
+        'std_absolute_difference': float(
+            absolute_difference.std(unbiased=False).cpu()
+        ),
+        'rms_difference': float(torch.sqrt(difference.square().mean()).cpu()),
+        'relative_mean_absolute_difference': float(
+            (mean_absolute_difference / torch.clamp(reference_scale, min=eps)).cpu()
+        ),
+        'cosine_distance': float(torch.clamp(cosine_distance, 0.0, 2.0).cpu()),
+    }
+
+
 def full_layer_erf(
         input_tensor: torch.Tensor,
         activation: torch.Tensor,

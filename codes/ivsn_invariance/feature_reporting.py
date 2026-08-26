@@ -12,7 +12,7 @@ import pandas as pd
 from PIL import Image
 from scipy import stats
 
-from .feature_analysis import normalized_map
+from .feature_analysis import erf_distance_metrics, normalized_map, unit_mass_map
 
 
 FEATURE_METRICS = (
@@ -610,6 +610,80 @@ def save_erf_figure(
     plt.close(fig)
 
 
+def save_unit_mass_search_erf_figure(
+        original_image: Image.Image,
+        transformed_image: Image.Image,
+        original_erf: np.ndarray,
+        transformed_erf: np.ndarray,
+        title: str,
+        path: Path,
+    ) -> None:
+    """Save the original full-search ERF layout using unit-mass maps."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    display_size = (original_erf.shape[1], original_erf.shape[0])
+    original_rgb = np.asarray(
+        original_image.resize(display_size, Image.BILINEAR), dtype=np.float32
+    ) / 255.0
+    transformed_rgb = np.asarray(
+        transformed_image.resize(display_size, Image.BILINEAR), dtype=np.float32
+    ) / 255.0
+    pixel_difference = np.abs(original_rgb - transformed_rgb).mean(axis=2)
+    original_mass = unit_mass_map(original_erf)
+    transformed_mass = unit_mass_map(transformed_erf)
+    erf_difference = np.abs(original_mass - transformed_mass)
+    shared_peak = max(
+        float(original_mass.max()),
+        float(transformed_mass.max()),
+        np.finfo(np.float32).eps,
+    )
+    difference_peak = max(
+        float(erf_difference.max()),
+        np.finfo(np.float32).eps,
+    )
+    metrics = erf_distance_metrics(original_erf, transformed_erf)
+
+    fig, axes = plt.subplots(2, 3, figsize=(13, 8))
+    panels = (
+        (axes[0, 0], original_rgb, 'Original-target search image', None),
+        (axes[0, 1], transformed_rgb, 'Transformed-target search image', None),
+        (axes[0, 2], pixel_difference, 'Input absolute difference', 'gray'),
+    )
+    for axis, values, panel_title, cmap in panels:
+        axis.imshow(values, cmap=cmap)
+        axis.set_title(panel_title)
+        axis.axis('off')
+
+    axes[1, 0].imshow(original_rgb)
+    axes[1, 0].imshow(
+        original_mass, cmap='magma', alpha=0.55,
+        vmin=0, vmax=shared_peak,
+    )
+    axes[1, 0].set_title('Original-target unit-mass ERF')
+    axes[1, 1].imshow(transformed_rgb)
+    axes[1, 1].imshow(
+        transformed_mass, cmap='magma', alpha=0.55,
+        vmin=0, vmax=shared_peak,
+    )
+    axes[1, 1].set_title('Transformed-target unit-mass ERF')
+    axes[1, 2].imshow(
+        erf_difference, cmap='viridis', vmin=0, vmax=difference_peak
+    )
+    axes[1, 2].set_title('Absolute unit-mass difference')
+    axes[1, 2].text(
+        0.02, 0.98,
+        f"TV distance = {metrics['erf_total_variation_distance']:.2f}",
+        transform=axes[1, 2].transAxes, va='top', color='white',
+        fontsize=9, bbox={'facecolor': 'black', 'alpha': 0.55, 'pad': 3},
+    )
+    for axis in axes[1]:
+        axis.axis('off')
+
+    fig.suptitle(f'{title}\nEach complete search-image ERF sums to 1')
+    fig.tight_layout()
+    fig.savefig(path, dpi=200, bbox_inches='tight')
+    plt.close(fig)
+
+
 def save_erf_arrays(
         original_erf: np.ndarray,
         transformed_erf: np.ndarray,
@@ -622,4 +696,6 @@ def save_erf_arrays(
         transformed_erf=transformed_erf,
         original_erf_normalized=normalized_map(original_erf),
         transformed_erf_normalized=normalized_map(transformed_erf),
+        original_erf_unit_mass=unit_mass_map(original_erf),
+        transformed_erf_unit_mass=unit_mass_map(transformed_erf),
     )
