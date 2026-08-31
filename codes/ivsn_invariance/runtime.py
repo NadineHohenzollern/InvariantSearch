@@ -68,27 +68,27 @@ SEED = 0
 
 
 DEFAULT_GIST_CONFIG = dict(
-    in_channels=1,
-    mode='dynamic',
-    fmax=.35,
-    fratio=1.7,
-    k=0.52,
-    n_scales=4,
-    n_orientations=6,
-    n_phases=2,
-    scale=25,
-    gaussian=True,
-    gaussian_inverse=False,
-    n_stds=3,
-    dc_compensate=True,
-    stride=4,
-    energy=True,
-    energy_mode='substitute',
-    divisive_norm=False,
-    pooling=None,
-    pool_size=16,
-    pool_stride=16,
-    flatten=False
+    in_channels = 1,
+    mode = "dynamic",
+    fmax = 0.35,
+    fratio = 1.7,
+    k = 0.52,
+    n_scales = 4,
+    n_orientations = 6,
+    n_phases = 2,
+    scale = 25,
+    gaussian = True,
+    gaussian_inverse = False,
+    n_stds = 3,
+    dc_compensate = True,
+    stride = 4,
+    energy = True,
+    energy_mode = "substitute",
+    divisive_norm = False,
+    pooling = None,
+    pool_size = 16,
+    pool_stride = 16,
+    flatten = False,
 )
 
 
@@ -100,7 +100,7 @@ DEFAULT_GIST_CHECKPOINTS = {
     'conv_gist': MODEL_WEIGHTS_DIR / 'conv_gist_model_epoch_15.pth',
     'conv_gist_mlp': MODEL_WEIGHTS_DIR / 'conv_gist_mlp_model_epoch_10.pth',
     'vgg_gist_imagenet64': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet64_epoch25.pth',
-    'vgg_gist_new': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet_randcrop_horflip_epochs_70.pth',
+    'vgg_gist_new': MODEL_WEIGHTS_DIR / 'vgg_gist_imagenet_randcrop_horflip_epochs_90.pth',
 }
 
 

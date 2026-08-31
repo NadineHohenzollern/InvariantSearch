@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument('--conv-gist-checkpoint', type=str, default=None)
     parser.add_argument('--conv-gist-mlp-checkpoint', type=str, default=None)
     parser.add_argument('--vgg-gist-imagenet64-checkpoint', type=str, default=None)
-    parser.add_argument('--vonenet-backbone', type=str, default='alexnet',
+    parser.add_argument('--vonenet-backbone', type=str, default='resnet50',
                         choices=['alexnet', 'resnet50'])
     parser.add_argument('--attention-padding', type=int, default=0)
     args = parser.parse_args()
