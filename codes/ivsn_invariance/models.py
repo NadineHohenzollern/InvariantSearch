@@ -309,6 +309,15 @@ class VOneNetAttentionModel(BaseAttentionModel):
             )
             self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2) 
 
+        elif backbone == "cornets":
+            self.backbone = nn.Sequential(
+                vonenet_model.vone_block,
+                vonenet_model.bottleneck,
+                vonenet_model.model.V2,
+                vonenet_model.model.V4,
+            )
+            self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2)
+
         else:
             raise ValueError(f"Unsupported backbone: {backbone}")
 
@@ -388,9 +397,10 @@ def build_attention_model(args) -> BaseAttentionModel:
             attention_padding=args.attention_padding
         )
 
-    if args.model_kind == 'vonenet':
+    if 'vonenet' in args.model_kind:
+        backbone = args.model_kind.split('-')[-1]  # Extract backbone from model_kind
         return VOneNetAttentionModel(
-            backbone=args.vonenet_backbone,
+            backbone=backbone,
             device=args.device,
             attention_padding=args.attention_padding
         )

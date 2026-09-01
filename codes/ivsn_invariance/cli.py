@@ -49,14 +49,12 @@ def parse_args():
     parser.add_argument('--no-dynamic-out-dir', action='store_true')
     parser.add_argument('--model-kind', type=str, default='vgg',
                         choices=['vgg', 'vgg_gist_pretrained', 'conv_gist', 'conv_gist_mlp', 'vgg_gist_imagenet64',
-                                 'vonenet', 'vgg_gist_new'])
+                                 'vgg_gist_new', 'vonenet-alexnet', 'vonenet-resnet50', 'vonenet-cornets'])
     parser.add_argument('--gist-image-size', type=int, default=224)
     parser.add_argument('--vgg-gist-checkpoint', type=str, default=None)
     parser.add_argument('--conv-gist-checkpoint', type=str, default=None)
     parser.add_argument('--conv-gist-mlp-checkpoint', type=str, default=None)
     parser.add_argument('--vgg-gist-imagenet64-checkpoint', type=str, default=None)
-    parser.add_argument('--vonenet-backbone', type=str, default='resnet50',
-                        choices=['alexnet', 'resnet50'])
     parser.add_argument('--attention-padding', type=int, default=0)
     args = parser.parse_args()
     return args
